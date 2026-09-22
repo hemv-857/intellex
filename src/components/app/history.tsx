@@ -26,7 +26,7 @@ interface HistoryProps {
   onNew: () => void
 }
 
-export function History({ onOpenTask, onNew }: HistoryProps) {
+export function HistoryView({ onOpenTask, onNew }: HistoryProps) {
   const [tasks, setTasks] = useState<TaskListItem[]>([])
   const [loading, setLoading] = useState(true)
 

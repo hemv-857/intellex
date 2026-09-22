@@ -60,6 +60,13 @@ workflow.
   truncation). Now `htmlToText()` strips scripts/styles/nav/footer/tags and the search
   snippet is included as context — extraction went from 0 → 6 records.
 - Reduced Prisma log noise from `query` to `warn,error`.
+- Fixed a naming-collision bug surfaced by console errors: `src/app/page.tsx` imported
+  `History` from both `lucide-react` (the SVG icon) and `@/components/app/history`
+  (the component). The lucide import shadowed the component, so `<History onOpenTask=…/>`
+  rendered an SVG icon and React warned "Unknown event handler property onOpenTask".
+  Renamed the component export to `HistoryView` and updated the import + usage. Verified
+  via Agent Browser: History section renders the timeline with the prior task, zero
+  console errors.
 
 ### Unresolved risks / next-phase recommendations
 - Execution is fire-and-forget in-process; fine for dev but a job queue would be

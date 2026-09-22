@@ -125,7 +125,7 @@ export default function Home() {
             )}
             {section === 'datasets' && <Datasets onOpenTask={openTask} />}
             {section === 'sources' && <SourcesView onOpenTask={openTask} />}
-            {section === 'history' && <History onOpenTask={openTask} onNew={() => navigate('new')} />}
+            {section === 'history' && <HistoryView onOpenTask={openTask} onNew={() => navigate('new')} />}
           </div>
         </main>
       </div>
