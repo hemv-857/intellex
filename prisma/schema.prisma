@@ -1,0 +1,77 @@
+// Prisma schema for AI-Powered Data Intelligence Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Task {
+  id            String   @id @default(cuid())
+  title         String
+  prompt        String
+  status        String   @default("planned") // planned | running | completed | failed
+  objective     String?
+  fields        String? // JSON: array of { name, type, description }
+  searchQueries String? // JSON: array of strings
+  sourceStrategy String? // JSON: array of strings (domains / site hints)
+  validationRules String? // JSON: array of strings
+  tags          String? // JSON: array of strings
+  workflow      String? // JSON: array of { id, name, status, detail }
+  progress      String? // JSON: { step, message, current, total }
+  stats         String? // JSON: { items, sources, valid, duplicates, tokens }
+  error         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  dataItems   DataItem[]
+  sources     DataSource[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model DataItem {
+  id          String   @id @default(cuid())
+  taskId      String
+  data        String   // JSON: structured fields
+  title       String?
+  summary     String?
+  confidence  Float    @default(0)
+  valid       Boolean  @default(true)
+  dedupeKey   String?
+  sourceId    String?
+  createdAt   DateTime @default(now())
+
+  task        Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  source      DataSource? @relation(fields: [sourceId], references: [id])
+
+  @@index([taskId])
+  @@index([dedupeKey])
+}
+
+model DataSource {
+  id          String   @id @default(cuid())
+  taskId      String
+  url         String
+  title       String?
+  snippet     String?
+  hostName    String?
+  favicon     String?
+  publishedTime String?
+  rank        Int      @default(0)
+  contentExcerpt String?
+  fetchStatus String   @default("pending") // pending | fetched | failed
+  tokensUsed  Int      @default(0)
+  fetchedAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  task        Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  dataItems   DataItem[]
+
+  @@index([taskId])
+  @@index([hostName])
+}
