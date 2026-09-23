@@ -108,6 +108,17 @@ workflow.
   and `isInsideNav: true`. VLM: "The status card is located directly under the workspace
   navigation items, visually connected to the list of links above it." Also added an
   animated amber ping dot to the "active runs" indicator for liveliness.
+- Made the sidebar fixed so it does not scroll with the main page. Changed the `<aside>`
+  from in-flow `flex` to `fixed top-0 left-0 h-screen z-40` (always pinned to the
+  viewport, independent of page scroll). Compensated for the now out-of-flow sidebar by
+  adding `md:ml-64` to both the header and the body wrapper so desktop content starts at
+  x=256 (after the 256px sidebar); mobile is unaffected (sidebar is `hidden md:flex`).
+  Lowered the header `z-40 -> z-30` so the fixed sidebar sits above it where they'd meet.
+  Verified via DOM: after scrolling the task-detail page 1228px, `asideTop` stayed at 0
+  and `asideBottom` at 900 (= viewport height) — the sidebar didn't move at all while the
+  main content scrolled. VLM confirmed the Intellex logo, all 6 nav items, and the Total
+  tasks card all remain visible in the sidebar when scrolled. Mobile: sidebar hidden,
+  header full-width (`headerLeft: 0`).
 
 ### Unresolved risks / next-phase recommendations
 - Execution is fire-and-forget in-process; fine for dev but a job queue would be

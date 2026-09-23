@@ -68,7 +68,7 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Top header */}
-      <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b border-border bg-background/80 px-4 md:px-6 backdrop-blur-xl">
+      <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/80 px-4 md:px-6 md:ml-64 backdrop-blur-xl">
         <div className="flex items-center gap-2.5 md:hidden">
           <div className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-md shadow-emerald-500/20">
             <Brain className="h-4 w-4 text-white" />
@@ -107,8 +107,8 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Body: sidebar + main */}
-      <div className="flex-1 flex">
+      {/* Body: sidebar (fixed) + main (offset to make room) */}
+      <div className="flex-1 flex items-start md:ml-64">
         <Sidebar section={section} onNavigate={navigate} taskCount={taskCount} runningCount={runningCount} />
 
         <main className="flex-1 min-w-0">

@@ -39,8 +39,8 @@ interface SidebarProps {
 
 export function Sidebar({ section, onNavigate, taskCount = 0, runningCount = 0 }: SidebarProps) {
   return (
-    <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar/60 backdrop-blur-xl">
-      <div className="flex items-center gap-2.5 px-5 h-16 border-b border-sidebar-border">
+    <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar/60 backdrop-blur-xl fixed top-0 left-0 h-screen z-40">
+      <div className="flex items-center gap-2.5 px-5 h-16 border-b border-sidebar-border shrink-0">
         <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg shadow-emerald-500/20">
           <Brain className="h-5 w-5 text-white" />
           <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-sidebar animate-pulse" />
