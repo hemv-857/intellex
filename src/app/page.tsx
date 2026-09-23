@@ -108,11 +108,11 @@ export default function Home() {
       </header>
 
       {/* Body: sidebar + main */}
-      <div className="flex-1 flex min-h-0">
+      <div className="flex-1 flex">
         <Sidebar section={section} onNavigate={navigate} taskCount={taskCount} runningCount={runningCount} />
 
-        <main className="flex-1 min-w-0 flex flex-col">
-          <div className="flex-1 px-4 md:px-6 lg:px-8 py-5 md:py-6 pb-20 md:pb-6 max-w-[1400px] w-full mx-auto">
+        <main className="flex-1 min-w-0">
+          <div className="px-4 md:px-6 lg:px-8 py-5 md:py-6 pb-24 md:pb-6 max-w-[1400px] w-full mx-auto">
             {section === 'dashboard' && <Dashboard onOpenTask={openTask} onNavigate={navigate} />}
             {section === 'new' && <NewTask onCreated={openTask} onCancel={() => navigate('dashboard')} />}
             {section === 'tasks' && <TasksList onOpenTask={openTask} onNew={() => navigate('new')} />}
@@ -153,9 +153,9 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* Footer */}
-      <footer className="mt-auto border-t border-border bg-background/60 backdrop-blur">
-        <div className="px-4 md:px-6 lg:px-8 py-3 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-muted-foreground max-w-[1400px] mx-auto w-full">
+      {/* Footer (desktop only — mobile uses the fixed bottom nav) */}
+      <footer className="hidden md:block border-t border-border bg-background/60 backdrop-blur">
+        <div className="px-4 md:px-6 lg:px-8 py-3 flex items-center justify-between gap-2 text-[11px] text-muted-foreground max-w-[1400px] mx-auto w-full">
           <div className="flex items-center gap-2">
             <div className="flex h-5 w-5 items-center justify-center rounded bg-gradient-to-br from-emerald-500 to-teal-600">
               <Brain className="h-3 w-3 text-white" />
@@ -164,8 +164,8 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-3">
             <span>Prompt → Plan → Collect → Clean → Export</span>
-            <span className="hidden sm:inline text-muted-foreground/40">·</span>
-            <span className="hidden sm:inline">Built with Next.js · Z.ai SDK</span>
+            <span className="hidden lg:inline text-muted-foreground/40">·</span>
+            <span className="hidden lg:inline">Built with Next.js · Z.ai SDK</span>
           </div>
         </div>
       </footer>

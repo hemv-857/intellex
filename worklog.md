@@ -75,6 +75,16 @@ workflow.
   2-column field grid where values wrap gracefully at word boundaries. Verified with VLM:
   "No text is truncated or cut off mid-word. All field values are fully readable.
   Layout is clean and well-aligned. No overlapping elements detected."
+- Fixed the footer floating mid-content bug: the footer was overlapping data-record
+  cards on tall pages because the body wrapper used `flex-1 ... min-h-0`. The `min-h-0`
+  let the flex item's box get capped at the flex-allocated height while the tall data
+  list overflowed beyond it, visually landing on top of the footer. Fix: removed
+  `min-h-0` (and the redundant `flex flex-col` / `flex-1` on the inner content div) so
+  the body grows with its content; made the footer `hidden md:block` (mobile already
+  has a fixed bottom nav) and dropped the redundant `mt-auto`. Verified via DOM offsets
+  (footer.offsetTop + height = page height on both tall Data-tab page 1569px and
+  Dashboard 1450px) and VLM: "footer is at the very bottom, after the last record
+  (Pangram), not floating between records."
 
 ### Unresolved risks / next-phase recommendations
 - Execution is fire-and-forget in-process; fine for dev but a job queue would be
