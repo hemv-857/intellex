@@ -85,6 +85,19 @@ workflow.
   (footer.offsetTop + height = page height on both tall Data-tab page 1569px and
   Dashboard 1450px) and VLM: "footer is at the very bottom, after the last record
   (Pangram), not floating between records."
+- Fixed the REAL footer-floating bug (the previous fix was incomplete): root cause was a
+  Radix `<ScrollArea className="max-h-[40rem]">` wrapping the data-record list. Radix
+  ScrollArea applies the class to the Root, but its Viewport child uses `size-full`
+  (height:100%), and since the Root's height resolves to `auto` (content-based), the
+  Viewport grew to its full natural height (1216px), pushing `root.scrollHeight` to 2075
+  while `root.offsetHeight` was 1569 — so 506px of invisible overflow appeared BELOW the
+  footer, making the footer look "stuck in the middle" of the data list. Fix: removed the
+  ScrollArea wrapper entirely on the Data tab and let the page scroll naturally (only 6
+  records, no need for an inner scroll region). Verified via DOM: `rootScrollH ==
+  rootOffsetH == 2144`, `footerTop(2099) + footerH(45) == rootScrollH`, `contentBelowFooter == 0`.
+  VLM: "footer is positioned AFTER the last record (Pangram) at the very bottom, not
+  floating or overlapping." Same ScrollArea+max-h anti-pattern still present in
+  dashboard/history/sources/datasets — candidate for a follow-up sweep.
 
 ### Unresolved risks / next-phase recommendations
 - Execution is fire-and-forget in-process; fine for dev but a job queue would be

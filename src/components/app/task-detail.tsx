@@ -32,7 +32,6 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -403,16 +402,15 @@ function DataTab({ items, fields, sources }: { items: DataItemView[]; fields: an
       </div>
 
       {/* Record cards */}
-      <ScrollArea className="max-h-[40rem] scrollbar-thin">
-        <div className="grid gap-2.5 pr-2">
-          {filtered.map((it, idx) => {
-            const src = it.sourceId ? sourceMap.get(it.sourceId) : null
-            return (
-              <Card key={it.id} className="hover:shadow-sm hover:border-emerald-500/30 transition-all">
-                <CardContent className="p-3.5">
-                  <div className="flex items-start gap-3">
-                    {/* Index + confidence */}
-                    <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5">
+      <div className="grid gap-2.5">
+        {filtered.map((it, idx) => {
+          const src = it.sourceId ? sourceMap.get(it.sourceId) : null
+          return (
+            <Card key={it.id} className="hover:shadow-sm hover:border-emerald-500/30 transition-all">
+              <CardContent className="p-3.5">
+                <div className="flex items-start gap-3">
+                  {/* Index + confidence */}
+                  <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5">
                       <span className="text-[10px] font-mono text-muted-foreground/50">{idx + 1}</span>
                       <div className="flex flex-col items-center gap-0.5">
                         <div className="h-10 w-1.5 overflow-hidden rounded-full bg-muted">
@@ -489,7 +487,6 @@ function DataTab({ items, fields, sources }: { items: DataItemView[]; fields: an
             )
           })}
         </div>
-      </ScrollArea>
     </div>
   )
 }
