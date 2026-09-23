@@ -98,6 +98,16 @@ workflow.
   VLM: "footer is positioned AFTER the last record (Pangram) at the very bottom, not
   floating or overlapping." Same ScrollArea+max-h anti-pattern still present in
   dashboard/history/sources/datasets — candidate for a follow-up sweep.
+- Moved the "Total tasks / No active runs" sidebar status card from the bottom of the
+  sidebar (which sat right next to the footer, making it look "connected to the footer")
+  up into the `<nav>` directly under the "Workspace" nav options. Removed the bottom
+  `<div className="px-4 py-4 border-t">` wrapper (the `border-t` visually tied it to the
+  footer area). Now the card sits immediately after the last nav item (History), inside
+  the scrollable nav, visually connected to the workspace options. Verified via DOM:
+  card now at `cardTop: 493` (right under nav items) vs footer at `footerTop: 1405`,
+  and `isInsideNav: true`. VLM: "The status card is located directly under the workspace
+  navigation items, visually connected to the list of links above it." Also added an
+  animated amber ping dot to the "active runs" indicator for liveliness.
 
 ### Unresolved risks / next-phase recommendations
 - Execution is fire-and-forget in-process; fine for dev but a job queue would be

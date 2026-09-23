@@ -80,25 +80,36 @@ export function Sidebar({ section, onNavigate, taskCount = 0, runningCount = 0 }
             </button>
           )
         })}
-      </nav>
 
-      <div className="px-4 py-4 border-t border-sidebar-border">
-        <div className="rounded-xl border border-sidebar-border bg-card/60 p-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Total tasks</span>
-            <span className="text-xs font-semibold text-foreground">{taskCount}</span>
+        {/* Workspace status — connected to the workspace nav options, not pinned to the footer */}
+        <div className="px-1 pt-3 mt-1">
+          <div className="rounded-xl border border-sidebar-border bg-card/60 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Total tasks</span>
+              <span className="text-xs font-semibold text-foreground">{taskCount}</span>
+            </div>
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all"
+                style={{ width: `${Math.min(100, (runningCount / Math.max(1, taskCount)) * 100)}%` }}
+              />
+            </div>
+            <p className="mt-2 text-[10px] text-muted-foreground flex items-center gap-1">
+              {runningCount > 0 ? (
+                <>
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  </span>
+                  <span className="text-amber-600 dark:text-amber-400 font-medium">{runningCount} active run{runningCount > 1 ? 's' : ''}</span>
+                </>
+              ) : (
+                <>No active runs</>
+              )}
+            </p>
           </div>
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all"
-              style={{ width: `${Math.min(100, (runningCount / Math.max(1, taskCount)) * 100)}%` }}
-            />
-          </div>
-          <p className="mt-2 text-[10px] text-muted-foreground">
-            {runningCount > 0 ? `${runningCount} active run${runningCount > 1 ? 's' : ''}` : 'No active runs'}
-          </p>
         </div>
-      </div>
+      </nav>
     </aside>
   )
 }
