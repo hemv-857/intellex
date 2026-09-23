@@ -34,14 +34,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -390,100 +382,115 @@ function DataTab({ items, fields, sources }: { items: DataItemView[]; fields: an
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0 gap-2 flex-wrap">
+    <div className="space-y-3">
+      {/* Filter bar */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 flex-1 min-w-48">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search records…" className="pl-9 h-9" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search records…" className="pl-9 h-9 bg-card" />
           </div>
           <Button
             size="sm"
             variant={validOnly ? 'default' : 'outline'}
             onClick={() => setValidOnly((v) => !v)}
-            className={validOnly ? 'bg-emerald-600 hover:bg-emerald-700 text-white h-9' : 'h-9'}
+            className={validOnly ? 'bg-emerald-600 hover:bg-emerald-700 text-white h-9' : 'h-9 bg-card'}
           >
             <ShieldCheck className="h-3.5 w-3.5 mr-1" /> Valid only
           </Button>
         </div>
         <span className="text-[11px] text-muted-foreground">{filtered.length} of {items.length}</span>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <ScrollArea className="max-h-[32rem] scrollbar-thin">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader className="sticky top-0 bg-card z-10">
-                <TableRow>
-                  <TableHead className="w-10">#</TableHead>
-                  <TableHead>Record</TableHead>
-                  <TableHead className="w-24 text-right">Confidence</TableHead>
-                  <TableHead className="w-32">Source</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((it, idx) => {
-                  const src = it.sourceId ? sourceMap.get(it.sourceId) : null
-                  return (
-                    <TableRow key={it.id} className="hover:bg-accent/40">
-                      <TableCell className="text-muted-foreground text-xs font-mono">{idx + 1}</TableCell>
-                      <TableCell className="max-w-md">
-                        <div className="font-medium text-sm truncate">{it.title || 'Untitled'}</div>
-                        {it.summary && <div className="text-[11px] text-muted-foreground truncate mt-0.5">{it.summary}</div>}
-                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-                          {fieldNames.slice(0, 4).map((f) => {
-                            const v = it.data[f]
-                            if (v === undefined || v === null || v === '') return null
-                            return (
-                              <span key={f} className="text-[10px] text-muted-foreground">
-                                <span className="text-muted-foreground/60">{f}:</span>{' '}
-                                <span className="text-foreground/80 font-mono">{truncate(String(v), 40)}</span>
-                              </span>
-                            )
-                          })}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="inline-flex items-center gap-1.5">
-                          <div className="h-1.5 w-12 overflow-hidden rounded-full bg-muted">
-                            <div
-                              className={cn(
-                                'h-full rounded-full',
-                                it.confidence >= 75 ? 'bg-emerald-500' : it.confidence >= 50 ? 'bg-amber-500' : 'bg-red-500',
-                              )}
-                              style={{ width: `${it.confidence}%` }}
-                            />
-                          </div>
-                          <span className="text-[11px] tabular-nums text-muted-foreground">{it.confidence}%</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {src ? (
-                          <a
-                            href={src.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] text-sky-600 dark:text-sky-400 hover:underline max-w-full"
-                            title={src.url}
-                          >
-                            {src.favicon && (
-                              <img src={src.favicon} alt="" className="h-3 w-3 rounded-sm shrink-0" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
+      </div>
+
+      {/* Record cards */}
+      <ScrollArea className="max-h-[40rem] scrollbar-thin">
+        <div className="grid gap-2.5 pr-2">
+          {filtered.map((it, idx) => {
+            const src = it.sourceId ? sourceMap.get(it.sourceId) : null
+            return (
+              <Card key={it.id} className="hover:shadow-sm hover:border-emerald-500/30 transition-all">
+                <CardContent className="p-3.5">
+                  <div className="flex items-start gap-3">
+                    {/* Index + confidence */}
+                    <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5">
+                      <span className="text-[10px] font-mono text-muted-foreground/50">{idx + 1}</span>
+                      <div className="flex flex-col items-center gap-0.5">
+                        <div className="h-10 w-1.5 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className={cn(
+                              'w-full rounded-full transition-all',
+                              it.confidence >= 75 ? 'bg-emerald-500' : it.confidence >= 50 ? 'bg-amber-500' : 'bg-red-500',
                             )}
-                            <span className="truncate">{src.hostName || hostFromUrl(src.url)}</span>
-                            <ExternalLink className="h-2.5 w-2.5 shrink-0" />
-                          </a>
-                        ) : (
-                          <span className="text-[11px] text-muted-foreground">—</span>
+                            style={{ height: `${it.confidence}%` }}
+                          />
+                        </div>
+                        <span className={cn(
+                          'text-[9px] tabular-nums font-semibold',
+                          it.confidence >= 75 ? 'text-emerald-600 dark:text-emerald-400' : it.confidence >= 50 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400',
+                        )}>
+                          {it.confidence}%
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start gap-2 flex-wrap">
+                        <h4 className="text-sm font-semibold leading-snug break-words">
+                          {it.title || 'Untitled'}
+                        </h4>
+                        {!it.valid && (
+                          <Badge variant="outline" className="text-[9px] py-0 px-1.5 bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 shrink-0">
+                            invalid
+                          </Badge>
                         )}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </ScrollArea>
-      </CardContent>
-    </Card>
+                      </div>
+                      {it.summary && (
+                        <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2 break-words">
+                          {it.summary}
+                        </p>
+                      )}
+                      {/* Field values */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 mt-2">
+                        {fieldNames.map((f) => {
+                          const v = it.data[f]
+                          if (v === undefined || v === null || v === '') return null
+                          return (
+                            <div key={f} className="flex gap-1.5 min-w-0 items-baseline">
+                              <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">{f}:</span>
+                              <span className="text-[11px] font-mono text-foreground/80 break-words min-w-0">
+                                {String(v)}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Source */}
+                    {src && (
+                      <a
+                        href={src.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-[10px] text-sky-600 dark:text-sky-400 hover:underline shrink-0 max-w-[8rem] mt-0.5"
+                        title={src.url}
+                      >
+                        {src.favicon && (
+                          <img src={src.favicon} alt="" className="h-3 w-3 rounded-sm shrink-0" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
+                        )}
+                        <span className="truncate">{src.hostName || hostFromUrl(src.url)}</span>
+                        <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+                      </a>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      </ScrollArea>
+    </div>
   )
 }
 

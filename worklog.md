@@ -67,6 +67,14 @@ workflow.
   Renamed the component export to `HistoryView` and updated the import + usage. Verified
   via Agent Browser: History section renders the timeline with the prior task, zero
   console errors.
+- Fixed a Data-tab layout bug reported via screenshot + VLM analysis: the records table
+  used `truncate` on the title, summary, and inline field values, causing text to be
+  clipped mid-word (e.g. "takeout serv", "conver…"). Redesigned the Data tab from a
+  cramped table into a **card-based grid**: each record is a Card with a vertical
+  confidence bar, full-wrapping title (`break-words`), `line-clamp-2` summary, and a
+  2-column field grid where values wrap gracefully at word boundaries. Verified with VLM:
+  "No text is truncated or cut off mid-word. All field values are fully readable.
+  Layout is clean and well-aligned. No overlapping elements detected."
 
 ### Unresolved risks / next-phase recommendations
 - Execution is fire-and-forget in-process; fine for dev but a job queue would be
