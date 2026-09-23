@@ -154,7 +154,7 @@ export default function Home() {
       </nav>
 
       {/* Footer (desktop only — mobile uses the fixed bottom nav) */}
-      <footer className="hidden md:block border-t border-border bg-background/60 backdrop-blur">
+      <footer className="hidden md:block border-t border-border bg-background/60 backdrop-blur md:ml-64">
         <div className="px-4 md:px-6 lg:px-8 py-3 flex items-center justify-between gap-2 text-[11px] text-muted-foreground max-w-[1400px] mx-auto w-full">
           <div className="flex items-center gap-2">
             <div className="flex h-5 w-5 items-center justify-center rounded bg-gradient-to-br from-emerald-500 to-teal-600">

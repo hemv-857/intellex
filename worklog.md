@@ -119,6 +119,13 @@ workflow.
   main content scrolled. VLM confirmed the Intellex logo, all 6 nav items, and the Total
   tasks card all remain visible in the sidebar when scrolled. Mobile: sidebar hidden,
   header full-width (`headerLeft: 0`).
+- Fixed the footer covering the sidebar's bottom: because the sidebar is now `fixed`
+  (out of flow) and the footer was full-width in normal flow, the footer rendered under
+  the sidebar's bottom area, hiding the "Total tasks" status card. Added `md:ml-64` to
+  the footer so it starts at x=256 (after the 256px sidebar), same as the header and body.
+  Verified via DOM: `footerLeft: 256`, `asideRight: 256`, `overlap: false`. VLM on
+  viewport screenshot: "The 'Total tasks' card is visible at the bottom of the sidebar,
+  the footer is not overlapping the sidebar."
 
 ### Unresolved risks / next-phase recommendations
 - Execution is fire-and-forget in-process; fine for dev but a job queue would be
