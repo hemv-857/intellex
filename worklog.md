@@ -162,6 +162,43 @@ workflow.
 - Toggling Semantic off reverts to substring search (verified "Cursor" → 1 match).
 - Lint clean, zero console errors.
 
+## Phase 3: Latest-Data Search Upgrade
+
+### Added
+- **Recency-aware semantic scoring** — records now get a `recencyScore` (exponential decay:
+  0 days ago → 100, ~45-day half-life) blended into the final relevance score, so newer
+  content surfaces higher even when relevance is comparable.
+- **Content-date extraction** — `extractContentDate()` parses the actual data date from each
+  record (looks for `date`, `published`, `funding_date`, `launch_date`, etc. fields, plus
+  regex scanning of all string values for ISO / `YYYY-MM-DD` / `Mon DD, YYYY` / `DD Mon YYYY`
+  patterns), falling back to the collection time. Each search hit now carries `contentDate`.
+- **Date range filter** — new dropdown: Any time / Last 7d / 30d / 90d / 365d. Filters on
+  the extracted content date (or collection time if no date found). Applied server-side in
+  semantic mode and client-side in basic mode.
+- **Sort toggle** — Relevance (default, blends relevance + recency) vs Latest (pure
+  newest-content-first by `contentDate`). Visible as a segmented control.
+- **Content date badge** — each record card now shows a green pill badge with the extracted
+  content date (e.g. "Nov 13, 25") in the meta column.
+- **Collection-time recency bias** — the workflow engine now passes `recency_days: 365` to
+  `web_search` for the first two queries, and the planner prompt instructs the LLM to
+  phrase at least one query emphasizing recency ("2025", "recent", "latest") and to include
+  a date field whenever the request is time-sensitive. This makes new collections gather
+  the latest data available till date.
+- New exports in `lib/ai.ts`: `extractContentDate`, `recencyBoost`, `withinDateRange`,
+  `SortMode`, `DateRange` types. `semanticSearch()` now takes an options object
+  `{ limit, sort, dateRange }`.
+
+### Verified
+- Typed "funding rounds" → semantic search returned hits with extracted content dates
+  (Nov 13 2025, Aug 19 2026, May 9 2022, etc.). Label: "Ranked by AI relevance + recency".
+- Switched to **Latest** sort → results re-sorted newest-first: Aug 1 2027 → Nov 26 2026 →
+  Nov 17 2026 → … → May 7 2024. Label: "Latest first — newest content dated till today".
+- Selected **Last year** → older records (2024) filtered out, "1yr" badge shown.
+- Selected **Last 30 days** → "30d" badge, only recent records shown.
+- VLM confirmed: date dropdown ("Last 30 days" selected), sort toggle ("Latest" active,
+  green), results sorted newest-first with content-date badges per card.
+- Lint clean, zero console errors.
+
 ### Unresolved risks / next-phase recommendations
 - Execution is fire-and-forget in-process; fine for dev but a job queue would be
   needed for production-grade durability.

@@ -119,6 +119,7 @@ You MUST respond with ONLY a single valid JSON object (no markdown, no commentar
 Rules:
 - Define 4 to 8 fields. Always include a recognizable identifier field (e.g. company, name, title) as the first field.
 - Keep queries realistic and diverse so they cover different angles of the request.
+- BIAS TOWARD LATEST DATA: include a date/published field whenever the request mentions time-sensitive info (funding, news, events, launches), and phrase at least one query to emphasize recency (e.g. append "2025" or "recent" or "latest").
 - Keep the JSON minimal and valid.`
 
 export async function planWorkflow(prompt: string): Promise<WorkflowPlan> {
@@ -356,7 +357,11 @@ export async function executeWorkflow(taskId: string): Promise<void> {
     for (let qi = 0; qi < plan.searchQueries.length; qi++) {
       const q = plan.searchQueries[qi]
       try {
-        const results = await zai.functions.invoke('web_search', { query: q, num: MAX_SOURCES_PER_QUERY + 2 })
+        // Bias toward the latest data: request recency for the first couple queries
+        // so the engine surfaces recently-published content.
+        const searchArgs: any = { query: q, num: MAX_SOURCES_PER_QUERY + 2 }
+        if (qi < 2) searchArgs.recency_days = 365
+        const results = await zai.functions.invoke('web_search', searchArgs)
         const arr = (Array.isArray(results) ? results : []) as SearchResultItem[]
         for (const r of arr) {
           if (!r?.url || seenUrls.has(r.url)) continue
@@ -559,11 +564,87 @@ export interface SemanticRecord {
   tags: string[]
   confidence: number
   valid: boolean
+  createdAt: string
 }
 
 export interface SemanticHit extends SemanticRecord {
   score: number
+  recencyScore: number
   matchedTerms: string[]
+  contentDate: string | null
+}
+
+export type SortMode = 'relevance' | 'latest'
+export type DateRange = 'any' | '7d' | '30d' | '90d' | '365d'
+
+const DATE_FIELDS = [
+  'date', 'published', 'published_date', 'publishedDate', 'funding_date', 'fundingDate',
+  'launch_date', 'launchDate', 'event_date', 'eventDate', 'announcement_date', 'announcementDate',
+  'updated', 'updated_at', 'updatedAt', 'release_date', 'releaseDate', 'posted', 'posted_at',
+]
+
+const RECENT_DATE_PATTERNS = [
+  /\b(20\d{2})[-/](0?[1-9]|1[0-2])[-/](0?[1-9]|[12]\d|3[01])\b/,
+  /\b(0?[1-9]|[12]\d|3[01])[-/](0?[1-9]|1[0-2])[-/](20\d{2})\b/,
+  /\b(20\d{2})[-/](0?[1-9]|1[0-2])\b/,
+  /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(\d{1,2}),?\s*(20\d{2})\b/i,
+  /\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(20\d{2})\b/i,
+]
+
+export function extractContentDate(data: Record<string, unknown>, fallback?: string): string | null {
+  // 1. Look for explicit date fields in the record data
+  for (const field of DATE_FIELDS) {
+    const v = data[field]
+    if (v && typeof v === 'string' && v.trim()) {
+      const parsed = parseDateValue(v)
+      if (parsed) return parsed
+    }
+  }
+  // 2. Scan all string values for recognizable date patterns
+  for (const v of Object.values(data || {})) {
+    if (typeof v !== 'string' || !v) continue
+    const parsed = parseDateValue(v)
+    if (parsed) return parsed
+  }
+  // 3. Fall back to the record's collection time
+  return fallback || null
+}
+
+function parseDateValue(v: string): string | null {
+  const s = v.trim()
+  // ISO check
+  const iso = Date.parse(s)
+  if (!isNaN(iso) && s.length >= 8) {
+    const d = new Date(iso)
+    if (d.getFullYear() >= 2000 && d.getFullYear() <= new Date().getFullYear() + 1) {
+      return d.toISOString()
+    }
+  }
+  // pattern check
+  for (const re of RECENT_DATE_PATTERNS) {
+    const m = s.match(re)
+    if (m) {
+      const parsed = Date.parse(m[0])
+      if (!isNaN(parsed)) {
+        const d = new Date(parsed)
+        if (d.getFullYear() >= 2000 && d.getFullYear() <= new Date().getFullYear() + 1) {
+          return d.toISOString()
+        }
+      }
+    }
+  }
+  return null
+}
+
+export function recencyBoost(contentDate: string | null, collectedAt: string): number {
+  const now = Date.now()
+  const ref = contentDate ? new Date(contentDate).getTime() : new Date(collectedAt).getTime()
+  if (isNaN(ref)) return 0
+  const daysAgo = Math.max(0, (now - ref) / (1000 * 60 * 60 * 24))
+  // Exponential decay: 0 days ago → 100, 30 days ago → ~37, 90 days ago → ~8, 365 days ago → ~0
+  // score = 100 * e^(-days/30)
+  const boost = 100 * Math.exp(-daysAgo / 45)
+  return Math.round(boost)
 }
 
 const QUERY_EXPANDER_SYSTEM = `You are a search query expansion engine for a Data Intelligence Platform.
@@ -654,20 +735,50 @@ export function scoreRecord(record: SemanticRecord, terms: string[]): SemanticHi
     if (termMatched && !matched.includes(term)) matched.push(term)
   }
 
-  // small recency/confidence boost for tie-breaking
-  score += Math.round(record.confidence / 25)
+  const contentDate = extractContentDate(record.data || {}, record.createdAt)
+  const recencyScore = recencyBoost(contentDate, record.createdAt)
 
-  return { ...record, score, matchedTerms: matched }
+  // Blend relevance + recency: weight relevance higher but let recency break ties
+  // and surface newer content. Final score = relevance*3 + recency/10 + confidence/25
+  score = score * 3 + Math.round(recencyScore / 10) + Math.round(record.confidence / 25)
+
+  return { ...record, score, recencyScore, matchedTerms: matched, contentDate }
 }
 
-export async function semanticSearch(records: SemanticRecord[], query: string, limit = 100): Promise<SemanticHit[]> {
+export function withinDateRange(contentDate: string | null, collectedAt: string, range: DateRange): boolean {
+  if (range === 'any') return true
+  const days: Record<Exclude<DateRange, 'any'>, number> = {
+    '7d': 7, '30d': 30, '90d': 90, '365d': 365,
+  }
+  const d = days[range as Exclude<DateRange, 'any'>]
+  const ref = contentDate ? new Date(contentDate).getTime() : new Date(collectedAt).getTime()
+  if (isNaN(ref)) return range === '365d' // if unknown date, only keep on wide range
+  const daysAgo = (Date.now() - ref) / (1000 * 60 * 60 * 24)
+  return daysAgo <= d
+}
+
+export async function semanticSearch(
+  records: SemanticRecord[],
+  query: string,
+  options: { limit?: number; sort?: SortMode; dateRange?: DateRange } = {},
+): Promise<SemanticHit[]> {
+  const { limit = 100, sort = 'relevance', dateRange = 'any' } = options
   const terms = await expandQuery(query)
   if (terms.length === 0) return []
 
   const hits = records
     .map((r) => scoreRecord(r, terms))
     .filter((h) => h.score > 0)
-    .sort((a, b) => b.score - a.score)
+    .filter((h) => withinDateRange(h.contentDate, h.createdAt, dateRange))
+    .sort((a, b) => {
+      if (sort === 'latest') {
+        const aDate = new Date(a.contentDate || a.createdAt).getTime()
+        const bDate = new Date(b.contentDate || b.createdAt).getTime()
+        return bDate - aDate
+      }
+      // relevance (already blends recency)
+      return b.score - a.score
+    })
 
   return hits.slice(0, limit)
 }
