@@ -127,6 +127,41 @@ workflow.
   viewport screenshot: "The 'Total tasks' card is visible at the bottom of the sidebar,
   the footer is not overlapping the sidebar."
 
+## Phase 2: Semantic Search
+
+### Added
+- **AI-powered semantic search** for the Datasets Explorer (replaces pure substring
+  matching). Uses LLM query expansion: the user's natural-language query is expanded
+  into 4-8 related terms/synonyms (cached for 5 min), then each record is scored by
+  weighted field matches (title=5, tag/taskTitle=3, summary=2, data field=1) + a
+  small confidence tie-breaker.
+- New `POST /api/search` endpoint (`src/app/api/search/route.ts`) — scans all
+  completed-task records, runs `semanticSearch()` from `lib/ai.ts`, returns ranked
+  hits with `score` + `matchedTerms`.
+- New functions in `src/lib/ai.ts`: `expandQuery()`, `scoreRecord()`,
+  `semanticSearch()`, plus `SemanticRecord` / `SemanticHit` types and an in-memory
+  LLM expansion cache (5-min TTL).
+- Datasets Explorer UI (`src/components/app/datasets.tsx`):
+  - New **Semantic** toggle button (on by default, emerald gradient when active).
+  - When semantic is on + a query is typed, calls `/api/search` (debounced 400ms),
+    shows a spinner during the LLM call, then displays an "AI-expanded:" row of
+    the expanded term badges + match count.
+  - Results switch to a **card layout** ranked by AI relevance, each card showing
+    a vertical relevance bar + score, full field values (break-words, no
+    truncation), and the per-record matched terms as green badges.
+  - Toggling semantic off reverts to basic substring search.
+  - Removed the `ScrollArea`+`max-h` wrapper (same footer-breaking anti-pattern)
+    — now natural page scroll.
+
+### Verified
+- Typed "venture capital investments in AI companies" → LLM expanded to `venture`,
+  `capital`, `startup funding`, `funding` → returned ranked matches (Lovable,
+  Pangram, Cursor, etc.) each with matched-term badges and relevance scores. VLM
+  confirmed all 4 UI elements present: active Semantic toggle, AI-expanded row,
+  ranked-by-relevance results, per-record matched terms.
+- Toggling Semantic off reverts to substring search (verified "Cursor" → 1 match).
+- Lint clean, zero console errors.
+
 ### Unresolved risks / next-phase recommendations
 - Execution is fire-and-forget in-process; fine for dev but a job queue would be
   needed for production-grade durability.

@@ -9,21 +9,14 @@ import {
   ShieldCheck,
   Inbox,
   Layers,
+  Sparkles,
+  Loader2,
 } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { api, fmtNum, timeAgo, truncate } from './shared'
@@ -40,6 +33,11 @@ interface DatasetRecord {
   tags: string[]
   fields: any[]
   createdAt: string
+}
+
+interface SemanticHit extends DatasetRecord {
+  score: number
+  matchedTerms: string[]
 }
 
 interface TaskMeta {
@@ -63,11 +61,16 @@ export function Datasets({ onOpenTask }: DatasetsProps) {
   const [q, setQ] = useState('')
   const [taskFilter, setTaskFilter] = useState<string>('all')
   const [validOnly, setValidOnly] = useState(false)
+  const [semantic, setSemantic] = useState(true)
+  const [semanticHits, setSemanticHits] = useState<SemanticHit[] | null>(null)
+  const [semanticLoading, setSemanticLoading] = useState(false)
+  const [expandedTerms, setExpandedTerms] = useState<string[]>([])
 
+  // Load all records once (for filtering / basic search)
   const load = useCallback(async () => {
     try {
       const data = await api<{ count: number; tasks: TaskMeta[]; records: DatasetRecord[] }>(
-        `/api/datasets?q=${encodeURIComponent(q)}`,
+        `/api/datasets`,
       )
       setRecords(data.records)
       setTasks(data.tasks)
@@ -76,15 +79,49 @@ export function Datasets({ onOpenTask }: DatasetsProps) {
     } finally {
       setLoading(false)
     }
-  }, [q])
+  }, [])
 
   useEffect(() => {
     setLoading(true)
-    const t = setTimeout(load, 250)
-    return () => clearTimeout(t)
+    load()
   }, [load])
 
-  const filtered = records.filter((r) => {
+  // Semantic search — debounce, call the LLM-powered endpoint
+  useEffect(() => {
+    if (!semantic || !q.trim()) {
+      setSemanticHits(null)
+      setExpandedTerms([])
+      return
+    }
+    setSemanticLoading(true)
+    const t = setTimeout(async () => {
+      try {
+        const res = await api<{ total: number; hits: SemanticHit[]; expandedTerms?: string[] }>(
+          '/api/search',
+          { method: 'POST', body: JSON.stringify({ q, limit: 200 }) },
+        )
+        setSemanticHits(res.hits)
+        setExpandedTerms(res.hits?.[0]?.matchedTerms || [])
+      } catch (e) {
+        toast.error((e as Error).message || 'Semantic search failed')
+        setSemanticHits([])
+      } finally {
+        setSemanticLoading(false)
+      }
+    }, 400)
+    return () => clearTimeout(t)
+  }, [q, semantic])
+
+  // When semantic mode is on + there's a query, use semantic hits; otherwise basic substring
+  const usingSemantic = semantic && q.trim().length > 0 && semanticHits !== null
+  const baseRecords = usingSemantic ? semanticHits! : records
+
+  const filtered = baseRecords.filter((r) => {
+    // basic substring filter when not using semantic
+    if (!usingSemantic && q.trim()) {
+      const blob = `${r.title || ''} ${r.summary || ''} ${JSON.stringify(r.data)} ${r.taskTitle}`.toLowerCase()
+      if (!blob.includes(q.toLowerCase())) return false
+    }
     if (taskFilter !== 'all' && r.taskId !== taskFilter) return false
     if (validOnly && !r.valid) return false
     return true
@@ -128,8 +165,20 @@ export function Datasets({ onOpenTask }: DatasetsProps) {
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search across all records…" className="pl-9 bg-card" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={semantic ? "Semantic search — e.g. 'AI funding rounds' or 'remote companies'…" : "Search across all records…"} className="pl-9 bg-card" />
+          {semanticLoading && (
+            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500 animate-spin" />
+          )}
         </div>
+        <Button
+          size="sm"
+          variant={semantic ? 'default' : 'outline'}
+          onClick={() => setSemantic((s) => !s)}
+          className={semantic ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white' : 'bg-card'}
+          title="Toggle AI-powered semantic search (understands synonyms & related concepts)"
+        >
+          <Sparkles className={cn('h-3.5 w-3.5 mr-1', semantic && 'animate-pulse')} /> Semantic
+        </Button>
         <Select value={taskFilter} onValueChange={setTaskFilter}>
           <SelectTrigger className="w-full sm:w-56 bg-card">
             <SelectValue placeholder="All tasks" />
@@ -145,11 +194,25 @@ export function Datasets({ onOpenTask }: DatasetsProps) {
           size="sm"
           variant={validOnly ? 'default' : 'outline'}
           onClick={() => setValidOnly((v) => !v)}
-          className={validOnly ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}
+          className={validOnly ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-card'}
         >
           <ShieldCheck className="h-3.5 w-3.5 mr-1" /> Valid only
         </Button>
       </div>
+
+      {/* Semantic expanded terms */}
+      {usingSemantic && expandedTerms.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Sparkles className="h-3 w-3 text-emerald-500" />
+          <span className="font-medium">AI-expanded:</span>
+          {expandedTerms.map((t) => (
+            <Badge key={t} variant="outline" className="text-[10px] py-0 px-1.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20">
+              {t}
+            </Badge>
+          ))}
+          <span className="text-muted-foreground/60 ml-1">· {semanticHits?.length || 0} matched</span>
+        </div>
+      )}
 
       {/* Task chips */}
       <div className="flex flex-wrap gap-1.5">
@@ -183,92 +246,107 @@ export function Datasets({ onOpenTask }: DatasetsProps) {
         <Card>
           <CardContent className="py-16 flex flex-col items-center text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted mb-3">
-              <Inbox className="h-6 w-6 text-muted-foreground" />
+              {usingSemantic ? <Sparkles className="h-6 w-6 text-emerald-500" /> : <Inbox className="h-6 w-6 text-muted-foreground" />}
             </div>
-            <p className="text-sm font-medium">No records found</p>
+            <p className="text-sm font-medium">{usingSemantic ? 'No semantic matches' : 'No records found'}</p>
             <p className="text-xs text-muted-foreground mt-1 max-w-xs">
-              {q || taskFilter !== 'all' ? 'Try adjusting your filters.' : 'Run a collection to start building datasets.'}
+              {usingSemantic ? 'Try a different query or turn off Semantic to use basic search.' : q || taskFilter !== 'all' ? 'Try adjusting your filters.' : 'Run a collection to start building datasets.'}
             </p>
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm">Records ({fmtNum(filtered.length)})</CardTitle>
-            <span className="text-[11px] text-muted-foreground">showing first {Math.min(filtered.length, 500)}</span>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <ScrollArea className="max-h-[36rem] scrollbar-thin">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader className="sticky top-0 bg-card z-10">
-                    <TableRow>
-                      <TableHead className="w-10">#</TableHead>
-                      <TableHead>Record</TableHead>
-                      <TableHead className="w-24 text-right">Conf.</TableHead>
-                      <TableHead>Collection</TableHead>
-                      <TableHead className="w-20">When</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filtered.slice(0, 500).map((r, i) => (
-                      <TableRow key={r.id} className="hover:bg-accent/40">
-                        <TableCell className="text-muted-foreground text-xs font-mono">{i + 1}</TableCell>
-                        <TableCell className="max-w-sm">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm truncate">{r.title || 'Untitled'}</span>
-                            {!r.valid && <Badge variant="outline" className="text-[9px] py-0 px-1 bg-red-500/10 text-red-600 border-red-500/20">invalid</Badge>}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs font-medium text-muted-foreground">
+              {usingSemantic ? 'Ranked by AI relevance' : `Records (${fmtNum(filtered.length)})`}
+            </span>
+            <span className="text-[11px] text-muted-foreground">showing {Math.min(filtered.length, 200)}</span>
+          </div>
+          {filtered.slice(0, 200).map((r, i) => {
+            const hit = r as SemanticHit
+            const score = hit.score
+            return (
+              <Card key={r.id} className="hover:shadow-sm hover:border-emerald-500/30 transition-all">
+                <CardContent className="p-3.5">
+                  <div className="flex items-start gap-3">
+                    {/* rank / score */}
+                    <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5">
+                      <span className="text-[10px] font-mono text-muted-foreground/50">{i + 1}</span>
+                      {usingSemantic && score > 0 && (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{score}</span>
+                          <div className="h-8 w-1 overflow-hidden rounded-full bg-muted">
+                            <div
+                              className="w-full rounded-full bg-gradient-to-t from-emerald-500 to-teal-400"
+                              style={{ height: `${Math.min(100, score * 4)}%` }}
+                            />
                           </div>
-                          {r.summary && <div className="text-[11px] text-muted-foreground truncate mt-0.5">{r.summary}</div>}
-                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-                            {topFields.map((f) => {
-                              const v = r.data[f]
-                              if (v === undefined || v === null || v === '') return null
-                              return (
-                                <span key={f} className="text-[10px] text-muted-foreground">
-                                  <span className="text-muted-foreground/60">{f}:</span>{' '}
-                                  <span className="text-foreground/80 font-mono">{truncate(String(v), 32)}</span>
-                                </span>
-                              )
-                            })}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="inline-flex flex-col items-end gap-0.5">
-                            <span className={cn('text-[11px] tabular-nums font-medium', r.confidence >= 75 ? 'text-emerald-600 dark:text-emerald-400' : r.confidence >= 50 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400')}>
-                              {r.confidence}%
-                            </span>
-                            <div className="h-1 w-12 overflow-hidden rounded-full bg-muted">
-                              <div
-                                className={cn('h-full rounded-full', r.confidence >= 75 ? 'bg-emerald-500' : r.confidence >= 50 ? 'bg-amber-500' : 'bg-red-500')}
-                                style={{ width: `${r.confidence}%` }}
-                              />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-sm font-semibold leading-snug break-words">{r.title || 'Untitled'}</h4>
+                        {!r.valid && <Badge variant="outline" className="text-[9px] py-0 px-1.5 bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 shrink-0">invalid</Badge>}
+                      </div>
+                      {r.summary && <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2 break-words">{r.summary}</p>}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 mt-2">
+                        {topFields.map((f) => {
+                          const v = r.data[f]
+                          if (v === undefined || v === null || v === '') return null
+                          return (
+                            <div key={f} className="flex gap-1.5 min-w-0 items-baseline">
+                              <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">{f}:</span>
+                              <span className="text-[11px] font-mono text-foreground/80 break-words min-w-0">{String(v)}</span>
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <button
-                            onClick={() => onOpenTask(r.taskId)}
-                            className="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline truncate max-w-[10rem] block text-left"
-                            title={r.taskTitle}
-                          >
-                            {r.taskTitle}
-                          </button>
-                          <div className="flex flex-wrap gap-1 mt-0.5">
-                            {r.tags.slice(0, 2).map((t) => (
-                              <Badge key={t} variant="outline" className="text-[9px] py-0 px-1 bg-muted/40">{t}</Badge>
-                            ))}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-[11px] text-muted-foreground">{timeAgo(r.createdAt)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
+                          )
+                        })}
+                      </div>
+                      {usingSemantic && hit.matchedTerms?.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1 mt-2">
+                          <span className="text-[9px] text-muted-foreground/60">matched:</span>
+                          {hit.matchedTerms.slice(0, 6).map((t) => (
+                            <Badge key={t} variant="outline" className="text-[9px] py-0 px-1.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20">
+                              {t}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* meta */}
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <button
+                        onClick={() => onOpenTask(r.taskId)}
+                        className="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline truncate max-w-[8rem] text-right"
+                        title={r.taskTitle}
+                      >
+                        {truncate(r.taskTitle, 20)}
+                      </button>
+                      <div className="flex flex-wrap gap-1 justify-end">
+                        {r.tags.slice(0, 2).map((t) => (
+                          <Badge key={t} variant="outline" className="text-[9px] py-0 px-1 bg-muted/40">{t}</Badge>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <div className="h-1 w-10 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className={cn('h-full rounded-full', r.confidence >= 75 ? 'bg-emerald-500' : r.confidence >= 50 ? 'bg-amber-500' : 'bg-red-500')}
+                            style={{ width: `${r.confidence}%` }}
+                          />
+                        </div>
+                        <span className="text-[9px] tabular-nums text-muted-foreground">{r.confidence}%</span>
+                      </div>
+                      <span className="text-[9px] text-muted-foreground">{timeAgo(r.createdAt)}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
       )}
     </div>
   )

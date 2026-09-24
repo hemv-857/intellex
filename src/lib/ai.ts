@@ -545,4 +545,131 @@ export function markDone(taskId: string) {
   runningTasks.delete(taskId)
 }
 
+// ---------------------------------------------------------------------------
+// Semantic search — LLM-powered query expansion + relevance scoring
+// ---------------------------------------------------------------------------
+
+export interface SemanticRecord {
+  id: string
+  taskId: string
+  taskTitle: string
+  title: string | null
+  summary: string | null
+  data: Record<string, unknown>
+  tags: string[]
+  confidence: number
+  valid: boolean
+}
+
+export interface SemanticHit extends SemanticRecord {
+  score: number
+  matchedTerms: string[]
+}
+
+const QUERY_EXPANDER_SYSTEM = `You are a search query expansion engine for a Data Intelligence Platform.
+Given a user's natural-language search query, produce a list of related search terms, synonyms, and
+paraphrases that would help surface semantically relevant records.
+
+Respond with ONLY a JSON object (no markdown, no prose) in this exact shape:
+{"terms": ["term1", "term2", "term3", ...]}
+
+Rules:
+- Return 4 to 8 terms.
+- Include the original query's key words.
+- Include synonyms, abbreviations, and related domain terms.
+- Use lowercase, single words or short phrases (max 3 words each).
+- Do NOT include generic words like "data", "record", "find", "list".
+- Do NOT include the query verbatim if it is a full sentence — extract the key concepts.`
+
+const expansionCache = new Map<string, { terms: string[]; ts: number }>()
+const EXPANSION_TTL = 5 * 60 * 1000 // 5 minutes
+
+export async function expandQuery(query: string): Promise<string[]> {
+  const key = query.toLowerCase().trim()
+  if (!key) return []
+
+  const cached = expansionCache.get(key)
+  if (cached && Date.now() - cached.ts < EXPANSION_TTL) {
+    return cached.terms
+  }
+
+  try {
+    const zai = await getZAI()
+    const completion = await zai.chat.completions.create({
+      messages: [
+        { role: 'assistant', content: QUERY_EXPANDER_SYSTEM },
+        { role: 'user', content: `Query: "${query}"\n\nReturn the expansion JSON now.` },
+      ],
+      thinking: { type: 'disabled' },
+    })
+    const raw = completion.choices[0]?.message?.content ?? ''
+    const parsed = safeJsonParse<{ terms?: string[] }>(raw, { terms: [] })
+    const terms = Array.isArray(parsed.terms)
+      ? parsed.terms.map((t) => String(t).toLowerCase().trim()).filter((t) => t.length > 1).slice(0, 8)
+      : []
+    // Always ensure the original query's words are included
+    const originalWords = key.split(/\s+/).filter((w) => w.length > 2)
+    const allTerms = [...new Set([...originalWords, ...terms])]
+    expansionCache.set(key, { terms: allTerms, ts: Date.now() })
+    return allTerms
+  } catch {
+    // Fallback: just split the query into words
+    const words = key.split(/\s+/).filter((w) => w.length > 2)
+    return words
+  }
+}
+
+export function scoreRecord(record: SemanticRecord, terms: string[]): SemanticHit {
+  const title = (record.title || '').toLowerCase()
+  const taskTitle = (record.taskTitle || '').toLowerCase()
+  const summary = (record.summary || '').toLowerCase()
+  const tags = (record.tags || []).map((t) => String(t).toLowerCase())
+  const dataStr = JSON.stringify(record.data || {}).toLowerCase()
+
+  let score = 0
+  const matched: string[] = []
+
+  for (const term of terms) {
+    let termMatched = false
+    if (title.includes(term)) {
+      score += 5
+      termMatched = true
+    }
+    if (taskTitle.includes(term)) {
+      score += 3
+      termMatched = true
+    }
+    if (tags.some((t) => t.includes(term))) {
+      score += 3
+      termMatched = true
+    }
+    if (summary.includes(term)) {
+      score += 2
+      termMatched = true
+    }
+    if (dataStr.includes(term)) {
+      score += 1
+      termMatched = true
+    }
+    if (termMatched && !matched.includes(term)) matched.push(term)
+  }
+
+  // small recency/confidence boost for tie-breaking
+  score += Math.round(record.confidence / 25)
+
+  return { ...record, score, matchedTerms: matched }
+}
+
+export async function semanticSearch(records: SemanticRecord[], query: string, limit = 100): Promise<SemanticHit[]> {
+  const terms = await expandQuery(query)
+  if (terms.length === 0) return []
+
+  const hits = records
+    .map((r) => scoreRecord(r, terms))
+    .filter((h) => h.score > 0)
+    .sort((a, b) => b.score - a.score)
+
+  return hits.slice(0, limit)
+}
+
 export { buildInitialWorkflow }
