@@ -443,3 +443,61 @@ Stage Summary:
 - Add 30-day auto-purge for trashed tasks (cron sweep).
 - Add per-task data-quality score badge on cards.
 - Pin indicator in sidebar "Total tasks" card (show pinned count).
+
+---
+
+## Phase 6: Quality Score + Auto-purge Trash + Pinned Indicator (webDevReview round 2)
+
+### QA assessment
+- Lint clean, dev server healthy, all APIs 200, zero console errors after reload.
+- Tested dashboard, datasets (semantic + sort + date-range), task detail export
+  dropdown — all working.
+- Picked next-phase items from Phase 5 recommendations: per-task data-quality
+  score, 30-day auto-purge for trashed tasks, pinned indicator in sidebar.
+
+### Implemented
+
+#### 1. Per-task data-quality score (0-100)
+- `GET /api/tasks` now computes a `qualityScore` per task:
+  `validityRate*50 + sourceCoverage*25 + (1-dupPenalty)*25` (only for completed
+  tasks with items; 0 otherwise).
+- New reusable `<QualityBadge score={n} />` in `shared.tsx` — pill with gauge
+  icon, score number, and a color-coded mini progress bar (green ≥80, amber
+  ≥60, red <60).
+- Tasks list shows the badge on every completed task card next to the status.
+
+#### 2. 30-day auto-purge for trashed tasks
+- New `POST/GET /api/scheduler/purge-trash?key=...` endpoint (shared-secret +
+  rate-limited). Hard-deletes tasks whose `trashedAt` is older than 30 days,
+  logs `task_deleted` with `{ autoPurged: true }` for each.
+- Frontend (`page.tsx`) calls purge-trash every ~5 min (every 5th scheduler
+  tick) — idempotent + cheap.
+- Verified: returns `{ ok, purged: 0, message: "No stale trash." }` on empty;
+  returns `401` on wrong key.
+
+#### 3. Pinned indicator in sidebar "Total tasks" card
+- `Sidebar` now accepts `pinnedCount` prop; `page.tsx` computes it from the
+  tasks list and passes it down.
+- The Total tasks card shows a small amber pin pill with the count next to the
+  total (only when pinnedCount > 0).
+
+### Verified (Agent Browser + VLM)
+- Quality badge on all 5 completed task cards with scores 100/67/50 etc.,
+  color-coded (green/amber/red) with mini progress bars. VLM confirmed.
+- Sidebar Total tasks card shows amber pin badge "1" next to "5". VLM confirmed.
+- Purge-trash endpoint: 200 with `{purged:0}` on clean trash, 401 on bad key.
+- Zero console errors; lint clean.
+
+### Files
+- Modified: `src/app/api/tasks/route.ts` (qualityScore computation),
+  `src/components/app/shared.tsx` (TaskListItem +qualityScore, new QualityBadge),
+  `src/components/app/tasks-list.tsx` (QualityBadge on cards),
+  `src/components/app/sidebar.tsx` (pinnedCount prop + amber pin pill),
+  `src/app/page.tsx` (pinnedCount state + pass-through + purge-trash polling).
+- Created: `src/app/api/scheduler/purge-trash/route.ts`.
+
+### Next-phase recommendations
+- "Compare two tasks" side-by-side view.
+- Sort tasks by quality score (in addition to pinned/created).
+- Quality-score trend over time in Insights modal.
+- Show pinned count on Dashboard hero stat too.

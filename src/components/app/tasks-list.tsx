@@ -44,7 +44,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { api, type TaskListItem, type TaskStatus, StatusBadge, statusDotClass, fmtNum, timeAgo, truncate } from './shared'
+import { api, type TaskListItem, type TaskStatus, StatusBadge, statusDotClass, QualityBadge, fmtNum, timeAgo, truncate } from './shared'
 
 interface TasksListProps {
   onOpenTask: (id: string) => void
@@ -436,6 +436,9 @@ function TaskRow({
                 <Badge variant="outline" className="text-[9px] py-0 px-1.5 bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20 gap-0.5">
                   <Pin className="h-2 w-2 fill-amber-500" /> PINNED
                 </Badge>
+              )}
+              {view === 'active' && task.status === 'completed' && (
+                <QualityBadge score={task.qualityScore} className="text-[9px] py-0 px-1.5" />
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{task.objective || task.prompt}</p>

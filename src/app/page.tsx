@@ -48,6 +48,7 @@ export default function Home() {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
   const [taskCount, setTaskCount] = useState(0)
   const [runningCount, setRunningCount] = useState(0)
+  const [pinnedCount, setPinnedCount] = useState(0)
   const [activityCount, setActivityCount] = useState(0)
 
   // Modal/overlay states
@@ -114,6 +115,7 @@ export default function Home() {
         .then((d) => {
           setTaskCount(d.tasks.length)
           setRunningCount(d.tasks.filter((t) => t.status === 'running').length)
+          setPinnedCount(d.tasks.filter((t) => t.pinned).length)
         })
         .catch(() => {})
     }
@@ -132,10 +134,20 @@ export default function Home() {
     const a = setInterval(loadActivity, 30000)
     const s = setInterval(tickScheduler, 60000) // tick scheduler every 60s
     tickScheduler() // initial
+    // Purge trash older than 30 days every ~5 min (cheap + idempotent)
+    let tickCount = 0
+    const purgeTrash = () => {
+      fetch(`/api/scheduler/purge-trash?key=${process.env.NEXT_PUBLIC_SCHEDULER_KEY || 'intellex-dev'}`, { method: 'POST' }).catch(() => {})
+    }
+    const p = setInterval(() => {
+      tickCount++
+      if (tickCount % 5 === 0) purgeTrash()
+    }, 60000)
     return () => {
       clearInterval(i)
       clearInterval(a)
       clearInterval(s)
+      clearInterval(p)
     }
   }, [])
 
@@ -204,7 +216,7 @@ export default function Home() {
 
       {/* Body: sidebar (fixed) + main (offset to make room) */}
       <div className="flex-1 flex items-start md:ml-64">
-        <Sidebar section={section} onNavigate={navigate} taskCount={taskCount} runningCount={runningCount} />
+        <Sidebar section={section} onNavigate={navigate} taskCount={taskCount} runningCount={runningCount} pinnedCount={pinnedCount} />
 
         <main className="flex-1 min-w-0">
           <div className="px-4 md:px-6 lg:px-8 py-5 md:py-6 pb-24 md:pb-6 max-w-[1400px] w-full mx-auto">

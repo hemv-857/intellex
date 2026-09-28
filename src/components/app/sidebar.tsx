@@ -10,6 +10,7 @@ import {
   History,
   Brain,
   Search,
+  Pin,
   FileText as TemplateIcon,
   TrendingUp as InsightsIcon,
   Bell as ActivityIcon,
@@ -40,9 +41,10 @@ interface SidebarProps {
   onNavigate: (s: Section) => void
   taskCount?: number
   runningCount?: number
+  pinnedCount?: number
 }
 
-export function Sidebar({ section, onNavigate, taskCount = 0, runningCount = 0 }: SidebarProps) {
+export function Sidebar({ section, onNavigate, taskCount = 0, runningCount = 0, pinnedCount = 0 }: SidebarProps) {
   return (
     <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar/60 backdrop-blur-xl fixed top-0 left-0 h-screen z-40">
       <div className="flex items-center gap-2.5 px-5 h-16 border-b border-sidebar-border shrink-0">
@@ -91,7 +93,14 @@ export function Sidebar({ section, onNavigate, taskCount = 0, runningCount = 0 }
           <div className="rounded-xl border border-sidebar-border bg-card/60 p-3">
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted-foreground">Total tasks</span>
-              <span className="text-xs font-semibold text-foreground">{taskCount}</span>
+              <div className="flex items-center gap-1.5">
+                {pinnedCount > 0 && (
+                  <span className="flex items-center gap-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-full px-1.5 py-0.5">
+                    <Pin className="h-2.5 w-2.5 fill-amber-500" /> {pinnedCount}
+                  </span>
+                )}
+                <span className="text-xs font-semibold text-foreground tabular-nums">{taskCount}</span>
+              </div>
             </div>
             <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
               <div

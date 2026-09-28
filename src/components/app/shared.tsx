@@ -22,6 +22,7 @@ export interface TaskListItem {
   sourceCount: number
   pinned: boolean
   trashedAt: string | null
+  qualityScore: number
   createdAt: string
   updatedAt: string
   error: string | null
@@ -151,6 +152,33 @@ export function StatusBadge({ status, className }: { status: TaskStatus; classNa
 
 export function statusDotClass(status: TaskStatus) {
   return STATUS_META[status].dot
+}
+
+// ---------------------------------------------------------------------------
+// Data-quality badge — a 0-100 score with color + tiny ring
+// ---------------------------------------------------------------------------
+
+import { Gauge } from 'lucide-react'
+
+export function QualityBadge({ score, className }: { score: number; className?: string }) {
+  if (!score || score <= 0) return null
+  const tier = score >= 80 ? 'emerald' : score >= 60 ? 'amber' : 'red'
+  const tint =
+    tier === 'emerald'
+      ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+      : tier === 'amber'
+      ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
+      : 'bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/20'
+  const ringColor = tier === 'emerald' ? 'bg-emerald-500' : tier === 'amber' ? 'bg-amber-500' : 'bg-red-500'
+  return (
+    <Badge variant="outline" className={cn('gap-1 font-medium tabular-nums', tint, className)} title={`Data quality: ${score}/100`}>
+      <Gauge className="h-2.5 w-2.5" />
+      <span>{score}</span>
+      <span className="h-1 w-6 overflow-hidden rounded-full bg-muted/60">
+        <span className={cn('block h-full rounded-full', ringColor)} style={{ width: `${score}%` }} />
+      </span>
+    </Badge>
+  )
 }
 
 // ---------------------------------------------------------------------------

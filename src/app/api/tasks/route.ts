@@ -32,23 +32,42 @@ export async function GET(req: NextRequest) {
     include: { _count: { select: { dataItems: true, sources: true } } },
   })
 
-  const result = tasks.map((t) => ({
-    id: t.id,
-    title: t.title,
-    prompt: t.prompt,
-    status: t.status,
-    objective: t.objective,
-    tags: t.tags ? safeArr(t.tags) : [],
-    stats: t.stats ? safeObj(t.stats) : { items: 0, sources: 0, valid: 0, duplicates: 0, tokens: 0 },
-    progress: t.progress ? safeObj(t.progress) : null,
-    itemCount: (t as any)._count?.dataItems ?? 0,
-    sourceCount: (t as any)._count?.sources ?? 0,
-    pinned: t.pinned,
-    trashedAt: t.trashedAt,
-    createdAt: t.createdAt,
-    updatedAt: t.updatedAt,
-    error: t.error,
-  }))
+  const result = tasks.map((t) => {
+    const stats = t.stats ? safeObj(t.stats) : { items: 0, sources: 0, valid: 0, duplicates: 0, tokens: 0 }
+    // Compute a 0-100 data-quality score: weighted blend of validity rate, avg confidence
+    // (proxy: valid/items), source coverage, and low duplicate ratio.
+    const items = Number(stats.items ?? (t as any)._count?.dataItems ?? 0) || 0
+    const valid = Number(stats.valid ?? 0) || 0
+    const sources = Number(stats.sources ?? (t as any)._count?.sources ?? 0) || 0
+    const dups = Number(stats.duplicates ?? 0) || 0
+    let qualityScore = 0
+    if (t.status === 'completed' && items > 0) {
+      const validityRate = valid / items // 0..1
+      const dupPenalty = Math.min(1, dups / items) // 0..1
+      const sourceCoverage = Math.min(1, sources / 8) // 8 sources = full
+      qualityScore = Math.round(
+        (validityRate * 50) + (sourceCoverage * 25) + ((1 - dupPenalty) * 25)
+      )
+    }
+    return {
+      id: t.id,
+      title: t.title,
+      prompt: t.prompt,
+      status: t.status,
+      objective: t.objective,
+      tags: t.tags ? safeArr(t.tags) : [],
+      stats,
+      progress: t.progress ? safeObj(t.progress) : null,
+      itemCount: (t as any)._count?.dataItems ?? 0,
+      sourceCount: (t as any)._count?.sources ?? 0,
+      pinned: t.pinned,
+      trashedAt: t.trashedAt,
+      qualityScore,
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt,
+      error: t.error,
+    }
+  })
 
   return NextResponse.json({ tasks: result })
 }
