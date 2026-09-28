@@ -9,6 +9,11 @@ import {
   Globe,
   History,
   Brain,
+  Search,
+  FileText as TemplateIcon,
+  TrendingUp as InsightsIcon,
+  Bell as ActivityIcon,
+  Settings as SettingsIcon,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -110,6 +115,38 @@ export function Sidebar({ section, onNavigate, taskCount = 0, runningCount = 0 }
           </div>
         </div>
       </nav>
+
+      {/* Footer toolbar — quick actions */}
+      <div className="shrink-0 border-t border-sidebar-border px-3 py-2.5 space-y-1.5 bg-sidebar/80">
+        <button
+          onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
+          className="flex w-full items-center justify-between rounded-lg border border-sidebar-border bg-card/60 px-2.5 py-1.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+        >
+          <span className="flex items-center gap-1.5">
+            <Search className="h-3 w-3" /> Quick actions
+          </span>
+          <kbd className="h-4 px-1 rounded border border-border bg-muted text-[9px] font-mono">⌘K</kbd>
+        </button>
+        <div className="flex items-center gap-1">
+          <ToolbarButton icon={TemplateIcon} label="Templates" onClick={() => window.dispatchEvent(new CustomEvent('intellex:open-templates'))} />
+          <ToolbarButton icon={InsightsIcon} label="Insights" onClick={() => window.dispatchEvent(new CustomEvent('intellex:open-insights'))} />
+          <ToolbarButton icon={ActivityIcon} label="Activity" onClick={() => window.dispatchEvent(new CustomEvent('intellex:open-activity'))} />
+          <ToolbarButton icon={SettingsIcon} label="Settings" onClick={() => window.dispatchEvent(new CustomEvent('intellex:open-settings'))} />
+        </div>
+      </div>
     </aside>
+  )
+}
+
+function ToolbarButton({ icon: Icon, label, onClick }: { icon: any; label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      className="flex flex-1 flex-col items-center gap-0.5 rounded-lg py-1.5 text-[9px] text-muted-foreground hover:bg-accent hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+    </button>
   )
 }

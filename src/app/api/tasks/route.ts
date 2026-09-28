@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { planWorkflow, buildInitialWorkflow } from '@/lib/ai'
+import { logActivity } from '@/lib/api-utils'
 
 // GET /api/tasks?status=&q=  -> list tasks
 export async function GET(req: NextRequest) {
@@ -71,6 +72,13 @@ export async function POST(req: NextRequest) {
         progress: JSON.stringify({ step: 'plan', message: 'Workflow ready. Click Run to execute.', current: 1, total: 1 }),
         stats: JSON.stringify({ items: 0, sources: 0, valid: 0, duplicates: 0, tokens: 0 }),
       },
+    })
+
+    await logActivity({
+      type: 'task_created',
+      taskId: task.id,
+      message: `Created task "${task.title}"`,
+      meta: { title: task.title, prompt: prompt.slice(0, 200), tags: plan.tags },
     })
 
     return NextResponse.json({

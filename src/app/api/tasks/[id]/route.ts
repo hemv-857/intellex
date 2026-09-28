@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { logActivity } from '@/lib/api-utils'
 
 function safeArr(s?: string | null): any[] {
   if (!s) return []
@@ -70,6 +71,19 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   try {
+    const task = await db.task.findUnique({ where: { id }, select: { id: true, title: true } })
+    if (!task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+
+    // Log BEFORE delete (FK is ON DELETE SET NULL, so taskId is preserved here but will
+    // be nulled on the ActivityLog row once the task is removed — keep title in the message
+    // so the entry remains traceable after deletion).
+    await logActivity({
+      type: 'task_deleted',
+      taskId: id,
+      message: `Deleted task "${task.title}"`,
+      meta: { title: task.title },
+    })
+
     await db.task.delete({ where: { id } })
     return NextResponse.json({ ok: true })
   } catch {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import {
   Sparkles,
@@ -16,6 +16,7 @@ import {
   Lightbulb,
   Wand2,
   CheckCircle2,
+  LayoutTemplate,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -59,13 +60,27 @@ const EXAMPLE_PROMPTS = [
 interface NewTaskProps {
   onCreated: (taskId: string) => void
   onCancel: () => void
+  onOpenTemplates?: () => void
 }
 
-export function NewTask({ onCreated, onCancel }: NewTaskProps) {
+export function NewTask({ onCreated, onCancel, onOpenTemplates }: NewTaskProps) {
   const [prompt, setPrompt] = useState('')
   const [planning, setPlanning] = useState(false)
   const [running, setRunning] = useState(false)
   const [plan, setPlan] = useState<TaskDetail | null>(null)
+
+  // Listen for template prefill events (from command palette / template picker)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as string
+      if (detail) {
+        setPrompt(detail)
+        setPlan(null)
+      }
+    }
+    window.addEventListener('intellex:prefill-prompt', handler)
+    return () => window.removeEventListener('intellex:prefill-prompt', handler)
+  }, [])
 
   const handlePlan = async () => {
     if (prompt.trim().length < 10) {
@@ -118,6 +133,11 @@ export function NewTask({ onCreated, onCancel }: NewTaskProps) {
             Describe what you need in plain English. The AI will design the workflow, then you run it.
           </p>
         </div>
+        {onOpenTemplates && (
+          <Button variant="outline" size="sm" onClick={onOpenTemplates}>
+            <LayoutTemplate className="h-3.5 w-3.5 mr-1.5" /> Templates
+          </Button>
+        )}
       </div>
 
       {/* Prompt input */}

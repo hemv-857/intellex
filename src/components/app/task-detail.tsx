@@ -18,6 +18,7 @@ import {
   ExternalLink,
   FileJson,
   FileSpreadsheet,
+  FileText,
   Search,
   Quote,
   Sparkles,
@@ -25,6 +26,8 @@ import {
   Tag,
   Clock,
   Zap,
+  MoreHorizontal,
+  CalendarClock,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -126,8 +129,49 @@ export function TaskDetailView({ taskId, onBack, onDelete }: TaskDetailProps) {
     }
   }
 
-  const handleExport = (format: 'csv' | 'json') => {
+  const handleExport = (format: 'csv' | 'json' | 'xlsx') => {
     window.open(`/api/tasks/${taskId}/export?format=${format}`, '_blank')
+    toast.success(`Exporting as ${format.toUpperCase()}…`)
+  }
+
+  const handleSaveTemplate = async () => {
+    const name = window.prompt('Template name:', task.title)
+    if (!name || name.trim().length < 2) return
+    try {
+      await api('/api/templates', { method: 'POST', body: JSON.stringify({ name: name.trim(), prompt: task.prompt }) })
+      toast.success('Saved as template.')
+    } catch (e) {
+      toast.error((e as Error).message || 'Failed to save template')
+    }
+  }
+
+  const handleToggleSchedule = async () => {
+    const enabled = !(task as any).schedule?.enabled
+    const intervalMinutes = enabled ? 10080 : 0 // default weekly
+    if (enabled) {
+      const inp = window.prompt('Re-run interval in minutes (min 15, e.g. 1440 = daily, 10080 = weekly):', '10080')
+      if (!inp) return
+      const n = parseInt(inp, 10)
+      if (isNaN(n) || n < 15) {
+        toast.error('Interval must be at least 15 minutes.')
+        return
+      }
+      try {
+        await api(`/api/tasks/${taskId}/schedule`, { method: 'POST', body: JSON.stringify({ enabled: true, intervalMinutes: n }) })
+        toast.success(`Scheduled to re-run every ${n} min.`)
+        load()
+      } catch (e) {
+        toast.error((e as Error).message || 'Failed to schedule')
+      }
+    } else {
+      try {
+        await api(`/api/tasks/${taskId}/schedule`, { method: 'POST', body: JSON.stringify({ enabled: false }) })
+        toast.success('Schedule disabled.')
+        load()
+      } catch (e) {
+        toast.error((e as Error).message || 'Failed to disable schedule')
+      }
+    }
   }
 
   if (loading) {
@@ -169,11 +213,29 @@ export function TaskDetailView({ taskId, onBack, onDelete }: TaskDetailProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleExport('xlsx')}>
+                <FileSpreadsheet className="h-3.5 w-3.5 mr-2" /> Excel (.xlsx)
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleExport('csv')}>
-                <FileSpreadsheet className="h-3.5 w-3.5 mr-2" /> Export as CSV
+                <FileSpreadsheet className="h-3.5 w-3.5 mr-2" /> CSV
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleExport('json')}>
-                <FileJson className="h-3.5 w-3.5 mr-2" /> Export as JSON
+                <FileJson className="h-3.5 w-3.5 mr-2" /> JSON
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleSaveTemplate}>
+                <FileText className="h-3.5 w-3.5 mr-2" /> Save as template
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleToggleSchedule}>
+                <CalendarClock className="h-3.5 w-3.5 mr-2" /> {(task as any).schedule?.enabled ? 'Disable schedule' : 'Schedule re-run…'}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
+import { useTheme } from 'next-themes'
 import {
   LayoutDashboard,
   Sparkles,
@@ -9,8 +10,10 @@ import {
   Globe,
   History,
   Brain,
-  Github,
   Activity,
+  Command as CommandIcon,
+  Bell,
+  TrendingUp,
 } from 'lucide-react'
 import { ThemeToggle } from '@/components/theme/theme-toggle'
 import { Sidebar, type Section } from '@/components/app/sidebar'
@@ -21,7 +24,13 @@ import { TaskDetailView } from '@/components/app/task-detail'
 import { Datasets } from '@/components/app/datasets'
 import { SourcesView } from '@/components/app/sources-view'
 import { HistoryView } from '@/components/app/history'
-import { api, type TaskListItem, type TaskStatus } from '@/components/app/shared'
+import { CommandPalette } from '@/components/app/command-palette'
+import { ActivityCenter } from '@/components/app/activity-center'
+import { SettingsPanel, type Theme } from '@/components/app/settings-panel'
+import { InsightsModal } from '@/components/app/insights-modal'
+import { TemplatePicker } from '@/components/app/template-picker'
+import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
+import { api, type TaskListItem } from '@/components/app/shared'
 import { cn } from '@/lib/utils'
 import type { LucideIcon } from 'lucide-react'
 
@@ -39,18 +48,66 @@ export default function Home() {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
   const [taskCount, setTaskCount] = useState(0)
   const [runningCount, setRunningCount] = useState(0)
+  const [activityCount, setActivityCount] = useState(0)
 
-  const openTask = (id: string) => {
+  // Modal/overlay states
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [activityOpen, setActivityOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [insightsOpen, setInsightsOpen] = useState(false)
+  const [templatesOpen, setTemplatesOpen] = useState(false)
+
+  const { setTheme, resolvedTheme } = useTheme()
+
+  const openTask = useCallback((id: string) => {
     setActiveTaskId(id)
     setSection('task' as any)
-  }
+  }, [])
 
-  const navigate = (s: Section) => {
+  const navigate = useCallback((s: Section) => {
     setSection(s)
     if (s !== ('task' as any)) setActiveTaskId(null)
-  }
+  }, [])
 
-  // refresh global counts periodically
+  const toggleTheme = useCallback(() => {
+    setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')
+  }, [setTheme, resolvedTheme])
+
+  const handleThemeChange = useCallback((t: Theme) => {
+    setTheme(t)
+  }, [setTheme])
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    onNavigate: navigate,
+    onNewCollection: () => navigate('new'),
+    onOpenCommandPalette: () => setPaletteOpen((o) => !o),
+    onOpenSettings: () => setSettingsOpen(true),
+    onOpenActivity: () => setActivityOpen(true),
+    onOpenTemplates: () => setTemplatesOpen(true),
+    onOpenInsights: () => setInsightsOpen(true),
+    onToggleTheme: toggleTheme,
+  })
+
+  // Listen for sidebar toolbar custom events
+  useEffect(() => {
+    const openTemplates = () => setTemplatesOpen(true)
+    const openInsights = () => setInsightsOpen(true)
+    const openActivity = () => setActivityOpen(true)
+    const openSettings = () => setSettingsOpen(true)
+    window.addEventListener('intellex:open-templates', openTemplates)
+    window.addEventListener('intellex:open-insights', openInsights)
+    window.addEventListener('intellex:open-activity', openActivity)
+    window.addEventListener('intellex:open-settings', openSettings)
+    return () => {
+      window.removeEventListener('intellex:open-templates', openTemplates)
+      window.removeEventListener('intellex:open-insights', openInsights)
+      window.removeEventListener('intellex:open-activity', openActivity)
+      window.removeEventListener('intellex:open-settings', openSettings)
+    }
+  }, [])
+
+  // Refresh global counts periodically + run scheduler tick
   useEffect(() => {
     const load = () => {
       api<{ tasks: TaskListItem[] }>('/api/tasks')
@@ -60,10 +117,29 @@ export default function Home() {
         })
         .catch(() => {})
     }
+    const loadActivity = () => {
+      api<{ activities: any[] }>('/api/activity?limit=1')
+        .then((d) => setActivityCount(d.activities.length))
+        .catch(() => {})
+    }
+    const tickScheduler = () => {
+      fetch(`/api/scheduler/tick?key=${process.env.NEXT_PUBLIC_SCHEDULER_KEY || 'intellex-dev'}`).catch(() => {})
+    }
     load()
-    const i = setInterval(load, 5000)
-    return () => clearInterval(i)
+    loadActivity()
+    const i = setInterval(() => {
+      load()
+      loadActivity()
+    }, 5000)
+    const s = setInterval(tickScheduler, 60000) // tick scheduler every 60s
+    tickScheduler() // initial
+    return () => {
+      clearInterval(i)
+      clearInterval(s)
+    }
   }, [])
+
+  const hasActiveTask = section === ('task' as any) && !!activeTaskId
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -94,15 +170,34 @@ export default function Home() {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <a
-            href="https://z.ai"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-emerald-500/40 transition-colors"
+          {/* Command palette trigger */}
+          <button
+            onClick={() => setPaletteOpen(true)}
+            className="hidden sm:flex items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:border-emerald-500/40 transition-colors"
           >
-            <Github className="h-3.5 w-3.5" />
-            Powered by Z.ai
-          </a>
+            <CommandIcon className="h-3.5 w-3.5" />
+            <span>Quick actions</span>
+            <kbd className="h-4 px-1 rounded border border-border bg-muted text-[9px] font-mono">⌘K</kbd>
+          </button>
+          {/* Activity bell */}
+          <button
+            onClick={() => setActivityOpen(true)}
+            className="relative flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card hover:border-emerald-500/40 transition-colors"
+            title="Activity & notifications"
+          >
+            <Bell className="h-4 w-4 text-muted-foreground" />
+            {activityCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-background" />
+            )}
+          </button>
+          {/* Insights */}
+          <button
+            onClick={() => setInsightsOpen(true)}
+            className="hidden sm:flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card hover:border-emerald-500/40 transition-colors"
+            title="Data quality insights"
+          >
+            <TrendingUp className="h-4 w-4 text-emerald-500" />
+          </button>
           <ThemeToggle />
         </div>
       </header>
@@ -114,7 +209,13 @@ export default function Home() {
         <main className="flex-1 min-w-0">
           <div className="px-4 md:px-6 lg:px-8 py-5 md:py-6 pb-24 md:pb-6 max-w-[1400px] w-full mx-auto">
             {section === 'dashboard' && <Dashboard onOpenTask={openTask} onNavigate={navigate} />}
-            {section === 'new' && <NewTask onCreated={openTask} onCancel={() => navigate('dashboard')} />}
+            {section === 'new' && (
+              <NewTask
+                onCreated={openTask}
+                onCancel={() => navigate('dashboard')}
+                onOpenTemplates={() => setTemplatesOpen(true)}
+              />
+            )}
             {section === 'tasks' && <TasksList onOpenTask={openTask} onNew={() => navigate('new')} />}
             {section === ('task' as any) && activeTaskId && (
               <TaskDetailView
@@ -163,12 +264,34 @@ export default function Home() {
             <span>Intellex · AI-Powered Data Intelligence Platform</span>
           </div>
           <div className="flex items-center gap-3">
-            <span>Prompt → Plan → Collect → Clean → Export</span>
+            <button onClick={() => setPaletteOpen(true)} className="hover:text-foreground transition-colors">Prompt → Plan → Collect → Clean → Export</button>
             <span className="hidden lg:inline text-muted-foreground/40">·</span>
-            <span className="hidden lg:inline">Built with Next.js · Z.ai SDK</span>
+            <span className="hidden lg:inline">v2.0 · Built with Next.js · Z.ai SDK</span>
           </div>
         </div>
       </footer>
+
+      {/* Overlays */}
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        section={section}
+        onNavigate={navigate}
+        onNewCollection={() => navigate('new')}
+        onToggleTheme={toggleTheme}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenActivity={() => setActivityOpen(true)}
+        activeTaskId={activeTaskId}
+        hasActiveTask={hasActiveTask}
+      />
+      <ActivityCenter open={activityOpen} onOpenChange={setActivityOpen} onOpenTask={openTask} />
+      <SettingsPanel open={settingsOpen} onOpenChange={setSettingsOpen} onThemeChange={handleThemeChange} />
+      <InsightsModal open={insightsOpen} onOpenChange={setInsightsOpen} />
+      <TemplatePicker open={templatesOpen} onOpenChange={setTemplatesOpen} onUseTemplate={(prompt) => {
+        // navigate to new task and prefill — use a custom event
+        navigate('new')
+        window.dispatchEvent(new CustomEvent('intellex:prefill-prompt', { detail: prompt }))
+      }} />
     </div>
   )
 }

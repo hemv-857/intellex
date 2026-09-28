@@ -1,4 +1,4 @@
-// Prisma schema for AI-Powered Data Intelligence Platform
+// Prisma schema for AI-Powered Data Intelligence Platform (production)
 
 generator client {
   provider = "prisma-client-js"
@@ -24,14 +24,23 @@ model Task {
   progress      String? // JSON: { step, message, current, total }
   stats         String? // JSON: { items, sources, valid, duplicates, tokens }
   error         String?
+  // Production: scheduling, soft-delete, pinning
+  schedule      String? // JSON: { enabled, intervalMinutes, nextRunAt, lastRunAt } | null
+  pinned        Boolean  @default(false)
+  trashedAt     DateTime? // soft-delete: when set, task is in trash
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   dataItems   DataItem[]
   sources     DataSource[]
+  activity    ActivityLog[]
+  template    Template?  @relation(fields: [templateId], references: [id])
+  templateId  String?
 
   @@index([status])
   @@index([createdAt])
+  @@index([trashedAt])
+  @@index([pinned])
 }
 
 model DataItem {
@@ -74,4 +83,45 @@ model DataSource {
 
   @@index([taskId])
   @@index([hostName])
+}
+
+// Reusable prompt + schema templates
+model Template {
+  id          String   @id @default(cuid())
+  name        String
+  prompt      String
+  fields      String?  // JSON: array of FieldDef
+  tags        String?  // JSON: array of strings
+  icon        String?
+  isBuiltIn   Boolean  @default(false)
+  useCount    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tasks       Task[]
+
+  @@index([isBuiltIn])
+}
+
+// Audit trail — track every meaningful action
+model ActivityLog {
+  id          String   @id @default(cuid())
+  taskId      String?
+  type        String   // task_created | task_run | task_completed | task_failed | task_deleted | task_pinned | task_restored | task_scheduled | template_saved | export
+  message     String
+  meta        String?  // JSON: extra context
+  createdAt   DateTime @default(now())
+
+  task        Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([taskId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// App-wide settings (single row, keyed by singleton)
+model Setting {
+  id          String   @id @default("singleton")
+  preferences String   @default("{}") // JSON: { defaultSort, defaultDateRange, semanticByDefault, exportFormat, autoSchedule, theme }
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

@@ -96,6 +96,30 @@ function dedupeKeyFrom(data: Record<string, unknown>, fields: FieldDef[]): strin
   return parts.join(' | ')
 }
 
+// Retry a promise with exponential backoff (for resilient web calls)
+export async function withRetry<T>(fn: () => Promise<T>, retries = 2, baseDelay = 800): Promise<T> {
+  let lastErr: unknown
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn()
+    } catch (e) {
+      lastErr = e
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, baseDelay * (attempt + 1)))
+      }
+    }
+  }
+  throw lastErr
+}
+
+// Race a promise against a timeout
+export function withTimeout<T>(fn: () => Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    fn(),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Timed out after ${ms}ms`)), ms)),
+  ])
+}
+
 // ---------------------------------------------------------------------------
 // Workflow planner
 // ---------------------------------------------------------------------------
@@ -268,7 +292,7 @@ async function extractFromSource(
   let tokens = 0
 
   try {
-    const result: any = await zai.functions.invoke('page_reader', { url: source.url })
+    const result: any = await withRetry(() => withTimeout(() => zai.functions.invoke('page_reader', { url: source.url }), 45000), 1)
     if (result?.data) {
       pageData = {
         title: result.data.title,
@@ -361,7 +385,7 @@ export async function executeWorkflow(taskId: string): Promise<void> {
         // so the engine surfaces recently-published content.
         const searchArgs: any = { query: q, num: MAX_SOURCES_PER_QUERY + 2 }
         if (qi < 2) searchArgs.recency_days = 365
-        const results = await zai.functions.invoke('web_search', searchArgs)
+        const results = await withRetry(() => withTimeout(() => zai.functions.invoke('web_search', searchArgs), 30000), 1)
         const arr = (Array.isArray(results) ? results : []) as SearchResultItem[]
         for (const r of arr) {
           if (!r?.url || seenUrls.has(r.url)) continue
