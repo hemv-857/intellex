@@ -19,6 +19,7 @@ import {
   CheckSquare,
   Square,
   Trash,
+  GitCompare,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -65,6 +66,7 @@ export function TasksList({ onOpenTask, onNew }: TasksListProps) {
   const [q, setQ] = useState('')
   const [status, setStatus] = useState<'all' | TaskStatus>('all')
   const [view, setView] = useState<'active' | 'trash'>('active')
+  const [sort, setSort] = useState<'default' | 'quality' | 'records' | 'recent'>('default')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [runningIds, setRunningIds] = useState<Set<string>>(new Set())
 
@@ -175,8 +177,14 @@ export function TasksList({ onOpenTask, onNew }: TasksListProps) {
   }
 
   const runningCount = tasks.filter((t) => t.status === 'running').length
-  const pinnedTasks = tasks.filter((t) => t.pinned)
-  const unpinnedTasks = tasks.filter((t) => !t.pinned)
+  const sortFn = (a: TaskListItem, b: TaskListItem) => {
+    if (sort === 'quality') return (b.qualityScore || 0) - (a.qualityScore || 0)
+    if (sort === 'records') return (b.itemCount || 0) - (a.itemCount || 0)
+    if (sort === 'recent') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    return 0 // default = server order (pinned then createdAt)
+  }
+  const pinnedTasks = tasks.filter((t) => t.pinned).sort(sortFn)
+  const unpinnedTasks = tasks.filter((t) => !t.pinned).sort(sortFn)
 
   return (
     <div className="space-y-5 animate-fade-in-up">
@@ -206,9 +214,14 @@ export function TasksList({ onOpenTask, onNew }: TasksListProps) {
             </button>
           </div>
           {view === 'active' && (
-            <Button onClick={onNew} size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
-              <Sparkles className="h-4 w-4 mr-1.5" /> New Collection
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => window.dispatchEvent(new CustomEvent('intellex:open-compare'))} title="Compare two tasks side-by-side">
+                <GitCompare className="h-4 w-4 mr-1.5" /> Compare
+              </Button>
+              <Button onClick={onNew} size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                <Sparkles className="h-4 w-4 mr-1.5" /> New Collection
+              </Button>
+            </div>
           )}
         </div>
       </div>
@@ -233,6 +246,19 @@ export function TasksList({ onOpenTask, onNew }: TasksListProps) {
               {STATUS_FILTERS.map((f) => (
                 <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        )}
+        {view === 'active' && (
+          <Select value={sort} onValueChange={(v) => setSort(v as any)}>
+            <SelectTrigger className="w-full sm:w-40 bg-card">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">Default</SelectItem>
+              <SelectItem value="quality">Quality score</SelectItem>
+              <SelectItem value="records">Most records</SelectItem>
+              <SelectItem value="recent">Most recent</SelectItem>
             </SelectContent>
           </Select>
         )}

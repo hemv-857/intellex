@@ -501,3 +501,58 @@ Stage Summary:
 - Sort tasks by quality score (in addition to pinned/created).
 - Quality-score trend over time in Insights modal.
 - Show pinned count on Dashboard hero stat too.
+
+---
+
+## Phase 7: Compare Tasks + Sort by Quality (webDevReview round 3)
+
+### QA assessment
+- Lint clean, dev server healthy, zero console errors.
+- Tested Dashboard, Sources (48 sources traced), History (timeline with Sep 24 entries) — all stable.
+- Picked next-phase items: "Compare two tasks" side-by-side view + "Sort tasks by quality score".
+
+### Implemented
+
+#### 1. Compare Tasks side-by-side view
+- New `GET /api/tasks/compare?a=<id>&b=<id>` endpoint — returns both tasks' summarized
+  metrics (items, valid, invalid, sources, uniqueHosts, duplicates, tokens, validityRate,
+  dupRate, sourceCoverage, qualityScore), shared fields, shared tags, and per-metric
+  winners (`a | b | tie`).
+- New `<CompareModal>` component (`src/components/app/compare-modal.tsx`):
+  - Two task pickers (Task A emerald / Task B sky) filtered to completed tasks.
+  - Title row with colored summary cards.
+  - Metrics comparison table with trophy icons + colored values for winners; lower-is-better
+    for "Tokens used".
+  - Quality bars (A emerald / B sky) with High/Medium/Low labels.
+  - Overlap section showing shared fields (mono badges) + shared tags (violet badges).
+  - Verdict section: counts wins and declares a winner with quality score.
+- Wired into `page.tsx`: listens for `intellex:open-compare` event, passes `allTasks`.
+- "Compare" button added to the Tasks list header (next to New Collection).
+
+#### 2. Sort tasks by quality / records / recent
+- Tasks list now has a sort dropdown: Default / Quality score / Most records / Most recent.
+- Client-side sort applied to both pinned and unpinned sections.
+
+### Verified (Agent Browser + VLM)
+- Opened Compare modal → picked Bangalore (A) vs bestselling headphones (B):
+  - Metrics table rendered all 9 rows (Records, Valid, Validity rate, Sources, Unique
+    domains, Duplicates, Dup rate, Tokens, Quality score).
+  - Winners highlighted with trophy + green text (A won 5/5).
+  - Verdict: "Task A (Bangalore Startups Collection) leads in 5 of 5 differentiated
+    metrics, with a quality score of 100/100."
+  - Quality bars: A=100/100 green "High", B=50/100 red "Low".
+  - Overlap section showed shared fields + tags.
+- VLM rated Compare modal visual polish **9/10**.
+- Sort by "Quality score" → Bangalore (100) first, then Asia AI Conferences (67).
+- Zero console errors; lint clean.
+
+### Files
+- Created: `src/app/api/tasks/compare/route.ts`, `src/components/app/compare-modal.tsx`.
+- Modified: `src/app/page.tsx` (compareOpen state + allTasks + event listener + modal),
+  `src/components/app/tasks-list.tsx` (Compare button + sort dropdown + sortFn).
+
+### Next-phase recommendations
+- Quality-score trend over time in Insights modal (sparkline per day).
+- Show pinned count on Dashboard hero stat too.
+- Add "Compare" action to command palette.
+- Export the comparison as a PDF/image.

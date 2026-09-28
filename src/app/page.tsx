@@ -29,6 +29,7 @@ import { ActivityCenter } from '@/components/app/activity-center'
 import { SettingsPanel, type Theme } from '@/components/app/settings-panel'
 import { InsightsModal } from '@/components/app/insights-modal'
 import { TemplatePicker } from '@/components/app/template-picker'
+import { CompareModal } from '@/components/app/compare-modal'
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
 import { api, type TaskListItem } from '@/components/app/shared'
 import { cn } from '@/lib/utils'
@@ -57,6 +58,8 @@ export default function Home() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [insightsOpen, setInsightsOpen] = useState(false)
   const [templatesOpen, setTemplatesOpen] = useState(false)
+  const [compareOpen, setCompareOpen] = useState(false)
+  const [allTasks, setAllTasks] = useState<TaskListItem[]>([])
 
   const { setTheme, resolvedTheme } = useTheme()
 
@@ -96,15 +99,18 @@ export default function Home() {
     const openInsights = () => setInsightsOpen(true)
     const openActivity = () => setActivityOpen(true)
     const openSettings = () => setSettingsOpen(true)
+    const openCompare = () => setCompareOpen(true)
     window.addEventListener('intellex:open-templates', openTemplates)
     window.addEventListener('intellex:open-insights', openInsights)
     window.addEventListener('intellex:open-activity', openActivity)
     window.addEventListener('intellex:open-settings', openSettings)
+    window.addEventListener('intellex:open-compare', openCompare)
     return () => {
       window.removeEventListener('intellex:open-templates', openTemplates)
       window.removeEventListener('intellex:open-insights', openInsights)
       window.removeEventListener('intellex:open-activity', openActivity)
       window.removeEventListener('intellex:open-settings', openSettings)
+      window.removeEventListener('intellex:open-compare', openCompare)
     }
   }, [])
 
@@ -116,6 +122,7 @@ export default function Home() {
           setTaskCount(d.tasks.length)
           setRunningCount(d.tasks.filter((t) => t.status === 'running').length)
           setPinnedCount(d.tasks.filter((t) => t.pinned).length)
+          setAllTasks(d.tasks)
         })
         .catch(() => {})
     }
@@ -304,6 +311,7 @@ export default function Home() {
         navigate('new')
         window.dispatchEvent(new CustomEvent('intellex:prefill-prompt', { detail: prompt }))
       }} />
+      <CompareModal open={compareOpen} onOpenChange={setCompareOpen} tasks={allTasks} />
     </div>
   )
 }
