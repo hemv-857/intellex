@@ -20,6 +20,7 @@ import {
   Square,
   Trash,
   GitCompare,
+  Copy,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -146,6 +147,16 @@ export function TasksList({ onOpenTask, onNew }: TasksListProps) {
       load()
     } catch (e) {
       toast.error((e as Error).message || 'Failed to purge')
+    }
+  }
+
+  const handleDuplicate = async (id: string) => {
+    try {
+      const res = await api<{ task: { id: string; title: string } }>(`/api/tasks/${id}/duplicate`, { method: 'POST' })
+      toast.success(`Duplicated → "${res.task.title}"`)
+      load()
+    } catch (e) {
+      toast.error((e as Error).message || 'Failed to duplicate')
     }
   }
 
@@ -357,6 +368,7 @@ export function TasksList({ onOpenTask, onNew }: TasksListProps) {
                   onPin={(p) => handlePin(t.id, p)}
                   onRestore={() => handleRestore(t.id)}
                   onPurge={() => handlePurge(t.id)}
+                  onDuplicate={() => handleDuplicate(t.id)}
                 />
               ))}
             </div>
@@ -382,6 +394,7 @@ export function TasksList({ onOpenTask, onNew }: TasksListProps) {
                 onPin={(p) => handlePin(t.id, p)}
                 onRestore={() => handleRestore(t.id)}
                 onPurge={() => handlePurge(t.id)}
+                onDuplicate={() => handleDuplicate(t.id)}
               />
             ))}
           </div>
@@ -402,6 +415,7 @@ function TaskRow({
   onPin,
   onRestore,
   onPurge,
+  onDuplicate,
 }: {
   task: TaskListItem
   view: 'active' | 'trash'
@@ -413,6 +427,7 @@ function TaskRow({
   onPin: (pinned: boolean) => void
   onRestore: () => void
   onPurge: () => void
+  onDuplicate: () => void
 }) {
   const isRunning = task.status === 'running'
   const progress = task.progress
@@ -506,6 +521,9 @@ function TaskRow({
                 <div className="flex gap-0.5">
                   <Button size="sm" variant="ghost" onClick={() => onPin(!task.pinned)} className={cn('h-7 w-7 p-0', task.pinned ? 'text-amber-500' : 'text-muted-foreground hover:text-amber-500')} title={task.pinned ? 'Unpin' : 'Pin to top'}>
                     <Pin className={cn('h-3 w-3', task.pinned && 'fill-amber-500')} />
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={onDuplicate} className="h-7 w-7 p-0 text-muted-foreground hover:text-sky-600 dark:hover:text-sky-400" title="Duplicate task (clone prompt + schema)">
+                    <Copy className="h-3 w-3" />
                   </Button>
                   {task.status !== 'running' && (
                     <Button size="sm" variant="ghost" onClick={onRun} className="h-7 w-7 p-0 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700" title="Run / Re-run">

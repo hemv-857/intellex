@@ -28,6 +28,7 @@ import {
   Zap,
   MoreHorizontal,
   CalendarClock,
+  Copy,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -145,6 +146,16 @@ export function TaskDetailView({ taskId, onBack, onDelete }: TaskDetailProps) {
     }
   }
 
+  const handleDuplicate = async () => {
+    try {
+      const res = await api<{ task: { id: string; title: string } }>(`/api/tasks/${taskId}/duplicate`, { method: 'POST' })
+      toast.success(`Duplicated → "${res.task.title}"`)
+      onBack()
+    } catch (e) {
+      toast.error((e as Error).message || 'Failed to duplicate')
+    }
+  }
+
   const handleToggleSchedule = async () => {
     const enabled = !(task as any).schedule?.enabled
     const intervalMinutes = enabled ? 10080 : 0 // default weekly
@@ -233,6 +244,9 @@ export function TaskDetailView({ taskId, onBack, onDelete }: TaskDetailProps) {
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={handleSaveTemplate}>
                 <FileText className="h-3.5 w-3.5 mr-2" /> Save as template
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleDuplicate}>
+                <Copy className="h-3.5 w-3.5 mr-2" /> Duplicate task
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleToggleSchedule}>
                 <CalendarClock className="h-3.5 w-3.5 mr-2" /> {(task as any).schedule?.enabled ? 'Disable schedule' : 'Schedule re-run…'}

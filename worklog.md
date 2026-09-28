@@ -675,3 +675,49 @@ Stage Summary:
 - Per-task mini sparkline on task cards.
 - Add a "Duplicate task" action (clone prompt + schema).
 - Onboarding tour for first-time users.
+
+---
+
+## Phase 10: Duplicate Task Action (webDevReview round 6)
+
+### QA assessment
+- Lint clean, dev server healthy, zero console errors (only pre-existing a11y
+  aria-describedby warnings).
+- Task detail page tested: Export dropdown, Re-run, More actions menu all working.
+- Picked next-phase item: "Duplicate task" action (clone prompt + schema).
+
+### Implemented
+
+#### Duplicate task action
+- New `POST /api/tasks/[id]/duplicate` endpoint:
+  - Clones the source task's prompt + planned schema (fields, searchQueries,
+    sourceStrategy, validationRules, tags, templateId) into a NEW planned task.
+  - Does NOT copy collected dataItems/sources — the new task starts fresh so the
+    user runs it anew.
+  - New title = `<original> (copy)` (truncated to 80 chars).
+  - Logs `task_created` activity with meta `{ sourceTaskId, sourceTitle, duplicated: true }`.
+- Tasks list: new copy-icon button on every task card (between Pin and Run),
+  sky-blue hover tint, tooltip "Duplicate task (clone prompt + schema)".
+  - Clicking it calls the endpoint, shows a toast `Duplicated → "<new title>"`,
+  and reloads the list (new task appears at top with "Planned" status, 0 records).
+- Task detail "More actions" menu: new "Duplicate task" item (Copy icon)
+  between "Save as template" and "Schedule re-run…". Clicking duplicates and
+  navigates back to the tasks list.
+- Verified via API: `POST /api/tasks/<id>/duplicate` → 200 with new task id + title.
+- Verified via Agent Browser + VLM: clicked duplicate on Bangalore task → new
+  "Bangalore Startups Collection (copy)" task appeared at top with "Planned"
+  status, 0 records/0 sources; task count went 6 → 7; VLM confirmed copy icons on
+  every card.
+- Zero console errors; lint clean.
+
+### Files
+- Created: `src/app/api/tasks/[id]/duplicate/route.ts`.
+- Modified: `src/components/app/tasks-list.tsx` (handleDuplicate + onDuplicate prop
+  + Copy icon button on each card), `src/components/app/task-detail.tsx`
+  (handleDuplicate + "Duplicate task" menu item + Copy icon import).
+
+### Next-phase recommendations
+- Per-task mini sparkline on task cards.
+- Onboarding tour for first-time users.
+- Export the comparison as a PDF/image.
+- Bulk duplicate (clone N tasks at once via the bulk action bar).
