@@ -109,12 +109,30 @@ export function Dashboard({ onOpenTask, onNavigate }: DashboardProps) {
   return (
     <div className="space-y-6 animate-fade-in-up">
       {/* Hero banner */}
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent p-6 md:p-8">
-        <div className="absolute -top-12 -right-12 h-48 w-48 rounded-full bg-emerald-500/10 blur-3xl" />
-        <div className="absolute -bottom-16 -left-8 h-40 w-40 rounded-full bg-teal-500/10 blur-3xl" />
+      <div className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent p-6 md:p-8 shadow-sm">
+        {/* premium mesh gradient backdrop */}
+        <div
+          className="absolute inset-0 opacity-30 pointer-events-none"
+          style={{
+            backgroundImage:
+              'radial-gradient(at 20% 20%, oklch(0.62 0.14 162 / 0.25) 0px, transparent 50%), radial-gradient(at 80% 0%, oklch(0.6 0.12 195 / 0.18) 0px, transparent 50%), radial-gradient(at 0% 100%, oklch(0.7 0.15 85 / 0.12) 0px, transparent 50%)',
+          }}
+        />
+        {/* fine grid texture */}
+        <div
+          className="absolute inset-0 opacity-[0.025] pointer-events-none"
+          style={{
+            backgroundImage:
+              'linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px)',
+            backgroundSize: '28px 28px',
+            color: 'oklch(0.3 0.05 165)',
+          }}
+        />
+        <div className="absolute -top-12 -right-12 h-48 w-48 rounded-full bg-emerald-500/15 blur-3xl" />
+        <div className="absolute -bottom-16 -left-8 h-40 w-40 rounded-full bg-teal-500/15 blur-3xl" />
         <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="space-y-2 max-w-2xl">
-            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30">
+            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 backdrop-blur-sm">
               <Sparkles className="h-3 w-3 mr-1" /> AI-Powered Data Intelligence
             </Badge>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-balance">
@@ -375,9 +393,32 @@ export function Dashboard({ onOpenTask, onNavigate }: DashboardProps) {
 
 function EmptyChart({ label }: { label: string }) {
   return (
-    <div className="h-full flex flex-col items-center justify-center text-center">
-      <Globe className="h-8 w-8 text-muted-foreground/30 mb-2" />
-      <p className="text-xs text-muted-foreground">{label}</p>
+    <div className="h-full relative flex flex-col items-center justify-center text-center overflow-hidden">
+      {/* subtle grid backdrop to suggest a chart area */}
+      <div
+        className="absolute inset-0 opacity-[0.04]"
+        style={{
+          backgroundImage:
+            'linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px)',
+          backgroundSize: '24px 24px',
+          color: 'oklch(0.5 0.05 165)',
+        }}
+      />
+      {/* baseline axis */}
+      <div className="absolute bottom-6 left-3 right-3 h-px bg-border/60" />
+      <div className="relative flex flex-col items-center">
+        <div className="flex items-end gap-1 mb-2 opacity-40">
+          {[12, 20, 8, 16, 10].map((h, i) => (
+            <div
+              key={i}
+              className="w-2 rounded-t-sm bg-gradient-to-t from-emerald-500/30 to-teal-400/20"
+              style={{ height: h }}
+            />
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-[10px] text-muted-foreground/60 mt-0.5">Run a collection to populate</p>
+      </div>
     </div>
   )
 }

@@ -20,6 +20,8 @@ export interface TaskListItem {
   progress: { step?: string; message?: string; current?: number; total?: number } | null
   itemCount: number
   sourceCount: number
+  pinned: boolean
+  trashedAt: string | null
   createdAt: string
   updatedAt: string
   error: string | null

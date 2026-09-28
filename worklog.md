@@ -388,3 +388,58 @@ Stage Summary:
 - Task detail Export dropdown offers Excel/CSV/JSON; XLSX endpoint returns 200, 36KB valid `.xlsx` (verified via `file`).
 - Scheduler tick endpoint responds; frontend polls every 60s.
 - Lint clean throughout.
+
+---
+
+## Phase 5: Pin/Trash/Bulk Ops + Styling Polish (webDevReview round 1)
+
+### QA assessment
+- Lint clean, dev server healthy, all APIs 200. No console errors after clean reload.
+- Found: `pinned` and `trashedAt` schema fields existed but had NO UI usage (dead schema).
+- Found: Activity endpoint was polled every 5s (wasteful — only feeds the bell dot).
+- Found (VLM): empty chart areas looked "broken/blank" rather than intentional.
+- Found (VLM): hero banner was a flat block, could be more premium.
+
+### Implemented
+
+#### 1. Pin / Favorite tasks (uses existing `Task.pinned` field)
+- `PATCH /api/tasks/[id]` with `{ pinned: boolean }` / `{ restore: boolean }` / `{ purge: boolean }`.
+- Tasks list GET now sorts by `pinned desc, createdAt desc` and returns `pinned`/`trashedAt`.
+- Tasks list UI: pin button per row (amber when pinned), "Pinned" section at top with header, "PINNED" badge on cards, header count "· N pinned".
+
+#### 2. Soft-delete + Trash (uses existing `Task.trashedAt` field)
+- `DELETE /api/tasks/[id]` now soft-deletes (sets `trashedAt`), not hard delete.
+- New "Trash" view toggle in tasks list (Active / Trash segmented control).
+- Trash view shows trashed tasks with **Restore** + **Delete forever** (purge via PATCH `{ purge: true }`).
+- Empty trash state with helpful copy.
+
+#### 3. Bulk operations
+- `POST /api/tasks/bulk` with `{ ids[], action: 'delete'|'purge'|'restore'|'pin'|'unpin' }`.
+- Tasks list: per-row checkbox + "Select all" + sticky bulk action bar (Pin all / Unpin / Move to trash / Restore / Delete forever / Clear).
+- Selection clears on reload.
+
+#### 4. Reduced wasteful polling
+- Activity bell now polls every **30s** (was 5s). Tasks still poll 5s for running-status updates.
+
+#### 5. Styling polish (mandatory)
+- **Hero banner**: added premium mesh-gradient backdrop (3 radial gradients) + fine grid texture + stronger blur orbs + shadow. VLM: "premium, refined look… subtle depth and texture".
+- **Empty chart states**: replaced blank Globe icon with an intentional chart-canvas look — subtle grid backdrop, baseline axis, faded placeholder bars, "Run a collection to populate" hint. VLM: "completely intentional rather than broken".
+- Pin badge / amber accents for pinned tasks; selection ring on selected cards.
+
+### Verified (Agent Browser)
+- Pinned a task → moved to "Pinned" section, "PINNED" badge shown, header "6 tasks · 1 pinned".
+- Moved a task to trash → toast "Moved to trash.", task disappeared from Active.
+- Switched to Trash view → trashed task shown with Restore + Delete forever.
+- Select all → bulk action bar appears with Pin all / Unpin / Move to trash / Clear.
+- Dashboard hero + empty charts: VLM rated visual polish **9/10**.
+- Zero console errors after clean reload; lint clean.
+
+### Files
+- Modified: `src/app/api/tasks/route.ts` (trashed filter + pinned sort + new fields), `src/app/api/tasks/[id]/route.ts` (PATCH pin/restore/purge + soft-delete DELETE), `src/components/app/tasks-list.tsx` (full rewrite: pin/trash/bulk UI), `src/components/app/shared.tsx` (TaskListItem +pinned/+trashedAt), `src/app/page.tsx` (30s activity poll), `src/components/app/dashboard.tsx` (hero mesh + empty chart states).
+- Created: `src/app/api/tasks/bulk/route.ts`.
+
+### Next-phase recommendations
+- Implement a "compare two tasks" side-by-side view.
+- Add 30-day auto-purge for trashed tasks (cron sweep).
+- Add per-task data-quality score badge on cards.
+- Pin indicator in sidebar "Total tasks" card (show pinned count).

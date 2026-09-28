@@ -68,24 +68,67 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   })
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+// PATCH /api/tasks/[id]  { pinned?: boolean, restore?: boolean, purge?: boolean }
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  try {
-    const task = await db.task.findUnique({ where: { id }, select: { id: true, title: true } })
-    if (!task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+  const body = await req.json().catch(() => ({} as any))
+  const task = await db.task.findUnique({ where: { id }, select: { id: true, title: true, pinned: true, trashedAt: true } })
+  if (!task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
 
-    // Log BEFORE delete (FK is ON DELETE SET NULL, so taskId is preserved here but will
-    // be nulled on the ActivityLog row once the task is removed — keep title in the message
-    // so the entry remains traceable after deletion).
+  // Hard purge (permanent delete)
+  if (body?.purge) {
     await logActivity({
       type: 'task_deleted',
       taskId: id,
-      message: `Deleted task "${task.title}"`,
+      message: `Permanently deleted task "${task.title}"`,
+      meta: { title: task.title, purged: true },
+    })
+    await db.task.delete({ where: { id } })
+    return NextResponse.json({ ok: true, purged: true })
+  }
+
+  // Restore from trash
+  if (body?.restore) {
+    await db.task.update({ where: { id }, data: { trashedAt: null } })
+    await logActivity({
+      type: 'task_restored',
+      taskId: id,
+      message: `Restored task "${task.title}" from trash`,
       meta: { title: task.title },
     })
+    return NextResponse.json({ ok: true, restored: true })
+  }
 
-    await db.task.delete({ where: { id } })
-    return NextResponse.json({ ok: true })
+  // Pin/unpin
+  if (typeof body?.pinned === 'boolean') {
+    await db.task.update({ where: { id }, data: { pinned: body.pinned } })
+    await logActivity({
+      type: 'task_pinned',
+      taskId: id,
+      message: body.pinned ? `Pinned task "${task.title}"` : `Unpinned task "${task.title}"`,
+      meta: { title: task.title, pinned: body.pinned },
+    })
+    return NextResponse.json({ ok: true, pinned: body.pinned })
+  }
+
+  return NextResponse.json({ error: 'No valid action (pinned | restore | purge)' }, { status: 400 })
+}
+
+// DELETE /api/tasks/[id]  -> soft-delete (move to trash)
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  try {
+    const task = await db.task.findUnique({ where: { id }, select: { id: true, title: true, trashedAt: true } })
+    if (!task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+
+    await db.task.update({ where: { id }, data: { trashedAt: new Date() } })
+    await logActivity({
+      type: 'task_deleted',
+      taskId: id,
+      message: `Moved task "${task.title}" to trash`,
+      meta: { title: task.title, softDelete: true },
+    })
+    return NextResponse.json({ ok: true, trashed: true })
   } catch {
     return NextResponse.json({ error: 'Task not found' }, { status: 404 })
   }

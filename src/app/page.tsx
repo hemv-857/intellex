@@ -127,14 +127,14 @@ export default function Home() {
     }
     load()
     loadActivity()
-    const i = setInterval(() => {
-      load()
-      loadActivity()
-    }, 5000)
+    // Tasks poll every 5s (for running status); activity bell poll every 30s (less critical)
+    const i = setInterval(load, 5000)
+    const a = setInterval(loadActivity, 30000)
     const s = setInterval(tickScheduler, 60000) // tick scheduler every 60s
     tickScheduler() // initial
     return () => {
       clearInterval(i)
+      clearInterval(a)
       clearInterval(s)
     }
   }, [])

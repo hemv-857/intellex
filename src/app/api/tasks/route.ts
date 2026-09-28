@@ -3,13 +3,19 @@ import { db } from '@/lib/db'
 import { planWorkflow, buildInitialWorkflow } from '@/lib/ai'
 import { logActivity } from '@/lib/api-utils'
 
-// GET /api/tasks?status=&q=  -> list tasks
+// GET /api/tasks?status=&q=&trashed=false  -> list tasks (excludes trashed by default)
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const status = searchParams.get('status') || undefined
   const q = searchParams.get('q')?.toLowerCase() || undefined
+  const trashed = searchParams.get('trashed') === 'true'
 
   const where: any = {}
+  if (trashed) {
+    where.NOT = { trashedAt: null }
+  } else {
+    where.trashedAt = null
+  }
   if (status && status !== 'all') where.status = status
   if (q) {
     where.OR = [
@@ -21,7 +27,7 @@ export async function GET(req: NextRequest) {
 
   const tasks = await db.task.findMany({
     where,
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }],
     take: 200,
     include: { _count: { select: { dataItems: true, sources: true } } },
   })
@@ -37,6 +43,8 @@ export async function GET(req: NextRequest) {
     progress: t.progress ? safeObj(t.progress) : null,
     itemCount: (t as any)._count?.dataItems ?? 0,
     sourceCount: (t as any)._count?.sources ?? 0,
+    pinned: t.pinned,
+    trashedAt: t.trashedAt,
     createdAt: t.createdAt,
     updatedAt: t.updatedAt,
     error: t.error,
