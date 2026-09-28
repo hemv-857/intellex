@@ -46,7 +46,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { api, type TaskListItem, type TaskStatus, StatusBadge, statusDotClass, QualityBadge, fmtNum, timeAgo, truncate } from './shared'
+import { api, type TaskListItem, type TaskStatus, StatusBadge, statusDotClass, QualityBadge, MiniConfidenceBar, fmtNum, timeAgo, truncate } from './shared'
 
 interface TasksListProps {
   onOpenTask: (id: string) => void
@@ -501,6 +501,9 @@ function TaskRow({
             <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground">
               <span className="flex items-center gap-1"><Database className="h-3 w-3" /> {fmtNum(task.stats?.items ?? task.itemCount)} records</span>
               <span className="flex items-center gap-1"><Globe className="h-3 w-3" /> {fmtNum(task.stats?.sources ?? task.sourceCount)} sources</span>
+              {view === 'active' && task.status === 'completed' && task.confidenceBuckets && (
+                <MiniConfidenceBar buckets={task.confidenceBuckets} />
+              )}
               {task.tags.slice(0, 3).map((tg) => (
                 <Badge key={tg} variant="outline" className="text-[10px] py-0 px-1.5 bg-muted/40">{tg}</Badge>
               ))}

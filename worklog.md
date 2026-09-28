@@ -763,3 +763,46 @@ Stage Summary:
 - Export the comparison as a PDF/image.
 - Bulk duplicate (clone N tasks at once via the bulk action bar).
 - Spotlight-style element highlighting in the tour (point at real UI elements).
+
+---
+
+## Phase 12: Per-Task Mini Confidence Sparkline on Task Cards (webDevReview round 8)
+
+### QA assessment
+- Lint clean, dev server healthy (HTTP 200), zero console errors.
+- Dashboard renders clean.
+- Picked next-phase item: "Per-task mini sparkline on task cards".
+
+### Implemented
+
+#### Mini confidence sparkline on task cards
+- `GET /api/tasks` now computes `confidenceBuckets: { high, medium, low }` per task
+  (records with confidence ≥75 = high, 50-74 = medium, <50 = low). Done in ONE extra
+  query (`db.dataItem.findMany` with `taskId in: [...]` selecting only `taskId +
+  confidence`) then bucketed in JS — no N+1 queries regardless of task count.
+- New reusable `<MiniConfidenceBar buckets={...} />` in `shared.tsx` — a 3-segment
+  stacked horizontal bar (emerald/amber/red) with a total count, hover tooltip
+  showing "N high · M medium · L low". Returns null when total is 0 (planned tasks).
+- Tasks list cards: the sparkline now appears inline in the stats row (after
+  records/sources), only for completed tasks in the active view.
+
+### Verified (Agent Browser + VLM)
+- API returns real buckets: Bangalore `{high:33,medium:0,low:0}` (quality 100),
+  headphones `{high:1,medium:19,low:5}` (quality 50), Asia AI `{high:8,medium:14,
+  low:1}` (quality 67).
+- Tasks list renders the bar: Bangalore shows a fully-green bar (all high) with
+  "33" count — VLM confirmed the bar + number render correctly. Mixed-bucket tasks
+  show the green/amber/red segments.
+- Zero console errors; lint clean.
+
+### Files
+- Modified: `src/app/api/tasks/route.ts` (one extra dataItem query + JS bucketing +
+  `confidenceBuckets` in response), `src/components/app/shared.tsx`
+  (TaskListItem.confidenceBuckets + new MiniConfidenceBar component),
+  `src/components/app/tasks-list.tsx` (render MiniConfidenceBar on completed cards).
+
+### Next-phase recommendations
+- Export the comparison as a PDF/image.
+- Bulk duplicate (clone N tasks at once via the bulk action bar).
+- Spotlight-style element highlighting in the onboarding tour.
+- Per-record confidence drilldown (click the sparkline → filter the Data tab by that bucket).

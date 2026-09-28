@@ -32,6 +32,24 @@ export async function GET(req: NextRequest) {
     include: { _count: { select: { dataItems: true, sources: true } } },
   })
 
+  // Fetch per-record confidence for all listed tasks in ONE query, bucket in JS.
+  // This powers the mini confidence sparkline on task cards without N+1 queries.
+  const taskIds = tasks.map((t) => t.id)
+  const allItems = taskIds.length > 0
+    ? await db.dataItem.findMany({
+        where: { taskId: { in: taskIds } },
+        select: { taskId: true, confidence: true },
+      })
+    : []
+  const bucketsByTask = new Map<string, { high: number; medium: number; low: number }>()
+  for (const it of allItems) {
+    const b = bucketsByTask.get(it.taskId) || { high: 0, medium: 0, low: 0 }
+    if (it.confidence >= 75) b.high++
+    else if (it.confidence >= 50) b.medium++
+    else b.low++
+    bucketsByTask.set(it.taskId, b)
+  }
+
   const result = tasks.map((t) => {
     const stats = t.stats ? safeObj(t.stats) : { items: 0, sources: 0, valid: 0, duplicates: 0, tokens: 0 }
     // Compute a 0-100 data-quality score: weighted blend of validity rate, avg confidence
@@ -63,6 +81,7 @@ export async function GET(req: NextRequest) {
       pinned: t.pinned,
       trashedAt: t.trashedAt,
       qualityScore,
+      confidenceBuckets: bucketsByTask.get(t.id) || { high: 0, medium: 0, low: 0 },
       createdAt: t.createdAt,
       updatedAt: t.updatedAt,
       error: t.error,

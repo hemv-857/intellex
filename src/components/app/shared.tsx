@@ -23,6 +23,7 @@ export interface TaskListItem {
   pinned: boolean
   trashedAt: string | null
   qualityScore: number
+  confidenceBuckets: { high: number; medium: number; low: number }
   createdAt: string
   updatedAt: string
   error: string | null
@@ -179,6 +180,43 @@ export function QualityBadge({ score, className }: { score: number; className?: 
         <span className={cn('block h-full rounded-full', ringColor)} style={{ width: `${score}%` }} />
       </span>
     </Badge>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Mini confidence sparkline — a 3-segment stacked bar (high/medium/low)
+// shown on task cards for an at-a-glance quality view.
+// ---------------------------------------------------------------------------
+
+export function MiniConfidenceBar({
+  buckets,
+  className,
+}: {
+  buckets: { high: number; medium: number; low: number }
+  className?: string
+}) {
+  const { high, medium, low } = buckets
+  const total = high + medium + low
+  if (total === 0) return null
+  const pct = (n: number) => (total > 0 ? (n / total) * 100 : 0)
+  const highPct = pct(high)
+  const medPct = pct(medium)
+  const lowPct = pct(low)
+  return (
+    <div className={cn('flex items-center gap-1.5', className)} title={`Confidence: ${high} high · ${medium} medium · ${low} low`}>
+      <div className="flex h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+        {highPct > 0 && (
+          <div className="h-full bg-emerald-500" style={{ width: `${highPct}%` }} />
+        )}
+        {medPct > 0 && (
+          <div className="h-full bg-amber-500" style={{ width: `${medPct}%` }} />
+        )}
+        {lowPct > 0 && (
+          <div className="h-full bg-red-500" style={{ width: `${lowPct}%` }} />
+        )}
+      </div>
+      <span className="text-[9px] tabular-nums text-muted-foreground">{total}</span>
+    </div>
   )
 }
 
