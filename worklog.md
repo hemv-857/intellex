@@ -855,3 +855,54 @@ Stage Summary:
 - Spotlight-style element highlighting in the onboarding tour.
 - Per-record confidence drilldown (click the sparkline → filter the Data tab).
 - Export the full Insights dashboard as a PDF report too.
+
+---
+
+## Phase 14: Per-Record Confidence Drilldown (webDevReview round 10)
+
+### QA assessment
+- Lint clean, dev server healthy (HTTP 200), zero console errors.
+- Task detail tested (Export, Re-run, Data/Sources/Schema tabs) — all stable.
+- Picked next-phase item: "Per-record confidence drilldown (click the sparkline →
+  filter the Data tab by that bucket)".
+
+### Implemented
+
+#### Per-record confidence drilldown
+- `MiniConfidenceBar` (in `shared.tsx`) now accepts an optional `taskId` prop.
+  When set, each colored segment (high/medium/low) becomes **clickable** (cursor
+  pointer + hover opacity), with a tooltip "Click to view N medium-confidence
+  records". Clicking dispatches a `intellex:open-task-with-filter` custom event
+  with `{ taskId, bucket }`.
+- Tasks list passes `taskId={task.id}` to the sparkline → segments are clickable.
+- `page.tsx` listens for `intellex:open-task-with-filter` → opens the task detail
+  AND (after a 300ms mount delay) dispatches `intellex:confidence-filter` with the
+  same detail.
+- `TaskDetailView` listens for `intellex:confidence-filter` → sets a
+  `confidenceFilter` state (`all | high | medium | low`), passed down to `DataTab`.
+- `DataTab` now filters records by the active bucket (high ≥75%, medium 50-74%,
+  low <50%) and shows a green-tinted banner at the top: "Filtered by confidence:
+  Medium (50-74%) · N matches" with a "Clear filter" button.
+
+### Verified (Agent Browser + VLM)
+- Dispatched `open-task-with-filter` for the headphones task (25 records, mixed
+  confidence) with `bucket: medium` → task detail opened → Data tab showed the
+  green filter banner "Filtered by confidence: Medium (50-74%) · 19 matches" with
+  a Clear filter button, and only the 19 medium-confidence records rendered below.
+- VLM confirmed: banner present, records list showing medium-confidence headphones
+  (Sony WH-1000XM6 at 50% confidence, etc.), "19 matches out of 25 total".
+- Zero console errors; lint clean.
+
+### Files
+- Modified: `src/components/app/shared.tsx` (MiniConfidenceBar: +taskId prop,
+  clickable segments with tooltips + event dispatch, refactored to avoid inner
+  component anti-pattern), `src/components/app/tasks-list.tsx` (pass taskId to
+  MiniConfidenceBar), `src/components/app/task-detail.tsx` (confidenceFilter state
+  + event listener + DataTab props + filter banner UI + Gauge icon import),
+  `src/app/page.tsx` (openTaskWithFilter event handler).
+
+### Next-phase recommendations
+- Bulk duplicate (clone N tasks at once via the bulk action bar).
+- Spotlight-style element highlighting in the onboarding tour.
+- Export the full Insights dashboard as a PDF report.
+- Add a confidence-bucket legend to the Data tab header.

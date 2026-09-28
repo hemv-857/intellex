@@ -108,12 +108,24 @@ export default function Home() {
     const openSettings = () => setSettingsOpen(true)
     const openCompare = () => setCompareOpen(true)
     const openCheatsheet = () => setCheatsheetOpen(true)
+    // Open a task AND pre-apply a confidence-bucket filter on its Data tab
+    const openTaskWithFilter = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { taskId?: string; bucket?: 'high' | 'medium' | 'low' }
+      if (!detail?.taskId) return
+      setActiveTaskId(detail.taskId)
+      setSection('task' as any)
+      // dispatch the filter event after the task view mounts
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('intellex:confidence-filter', { detail }))
+      }, 300)
+    }
     window.addEventListener('intellex:open-templates', openTemplates)
     window.addEventListener('intellex:open-insights', openInsights)
     window.addEventListener('intellex:open-activity', openActivity)
     window.addEventListener('intellex:open-settings', openSettings)
     window.addEventListener('intellex:open-compare', openCompare)
     window.addEventListener('intellex:open-cheatsheet', openCheatsheet)
+    window.addEventListener('intellex:open-task-with-filter', openTaskWithFilter)
     return () => {
       window.removeEventListener('intellex:open-templates', openTemplates)
       window.removeEventListener('intellex:open-insights', openInsights)
@@ -121,6 +133,7 @@ export default function Home() {
       window.removeEventListener('intellex:open-settings', openSettings)
       window.removeEventListener('intellex:open-compare', openCompare)
       window.removeEventListener('intellex:open-cheatsheet', openCheatsheet)
+      window.removeEventListener('intellex:open-task-with-filter', openTaskWithFilter)
     }
   }, [])
 

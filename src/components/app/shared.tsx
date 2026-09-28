@@ -191,9 +191,11 @@ export function QualityBadge({ score, className }: { score: number; className?: 
 export function MiniConfidenceBar({
   buckets,
   className,
+  taskId,
 }: {
   buckets: { high: number; medium: number; low: number }
   className?: string
+  taskId?: string
 }) {
   const { high, medium, low } = buckets
   const total = high + medium + low
@@ -202,17 +204,42 @@ export function MiniConfidenceBar({
   const highPct = pct(high)
   const medPct = pct(medium)
   const lowPct = pct(low)
+  const clickable = !!taskId
+  const onSegClick = (e: React.MouseEvent, bucket: 'high' | 'medium' | 'low', count: number) => {
+    if (!clickable || count === 0) return
+    e.stopPropagation()
+    window.dispatchEvent(new CustomEvent('intellex:open-task-with-filter', { detail: { taskId, bucket } }))
+  }
+  const segCls = (count: number) =>
+    clickable && count > 0 ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''
+  const segTitle = (count: number, bucket: string) =>
+    clickable && count > 0 ? `Click to view ${count} ${bucket}-confidence records` : `${count} ${bucket}`
   return (
     <div className={cn('flex items-center gap-1.5', className)} title={`Confidence: ${high} high · ${medium} medium · ${low} low`}>
       <div className="flex h-1.5 w-16 overflow-hidden rounded-full bg-muted">
         {highPct > 0 && (
-          <div className="h-full bg-emerald-500" style={{ width: `${highPct}%` }} />
+          <div
+            className={cn('h-full bg-emerald-500', segCls(high))}
+            style={{ width: `${highPct}%` }}
+            onClick={clickable && high > 0 ? (e) => onSegClick(e, 'high', high) : undefined}
+            title={segTitle(high, 'high')}
+          />
         )}
         {medPct > 0 && (
-          <div className="h-full bg-amber-500" style={{ width: `${medPct}%` }} />
+          <div
+            className={cn('h-full bg-amber-500', segCls(medium))}
+            style={{ width: `${medPct}%` }}
+            onClick={clickable && medium > 0 ? (e) => onSegClick(e, 'medium', medium) : undefined}
+            title={segTitle(medium, 'medium')}
+          />
         )}
         {lowPct > 0 && (
-          <div className="h-full bg-red-500" style={{ width: `${lowPct}%` }} />
+          <div
+            className={cn('h-full bg-red-500', segCls(low))}
+            style={{ width: `${lowPct}%` }}
+            onClick={clickable && low > 0 ? (e) => onSegClick(e, 'low', low) : undefined}
+            title={segTitle(low, 'low')}
+          />
         )}
       </div>
       <span className="text-[9px] tabular-nums text-muted-foreground">{total}</span>

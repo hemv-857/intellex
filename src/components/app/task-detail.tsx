@@ -29,6 +29,7 @@ import {
   MoreHorizontal,
   CalendarClock,
   Copy,
+  Gauge,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -81,6 +82,19 @@ export function TaskDetailView({ taskId, onBack, onDelete }: TaskDetailProps) {
   const [items, setItems] = useState<DataItemView[]>([])
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
+  const [confidenceFilter, setConfidenceFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all')
+
+  // Listen for confidence-filter events (from the mini sparkline on task cards)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { taskId?: string; bucket?: 'high' | 'medium' | 'low' }
+      if (detail?.taskId === taskId && detail.bucket) {
+        setConfidenceFilter(detail.bucket)
+      }
+    }
+    window.addEventListener('intellex:confidence-filter', handler)
+    return () => window.removeEventListener('intellex:confidence-filter', handler)
+  }, [taskId])
 
   const load = useCallback(async () => {
     try {
@@ -374,7 +388,7 @@ export function TaskDetailView({ taskId, onBack, onDelete }: TaskDetailProps) {
         </TabsList>
 
         <TabsContent value="data" className="mt-3">
-          <DataTab items={items} fields={task.fields} sources={sources} />
+          <DataTab items={items} fields={task.fields} sources={sources} confidenceFilter={confidenceFilter} onClearConfidenceFilter={() => setConfidenceFilter('all')} />
         </TabsContent>
 
         <TabsContent value="sources" className="mt-3">
@@ -428,13 +442,16 @@ function WorkflowStepCard({ step, isLast }: { step: WorkflowStep; isLast: boolea
 // Data tab
 // ---------------------------------------------------------------------------
 
-function DataTab({ items, fields, sources }: { items: DataItemView[]; fields: any[]; sources: DataSourceView[] }) {
+function DataTab({ items, fields, sources, confidenceFilter, onClearConfidenceFilter }: { items: DataItemView[]; fields: any[]; sources: DataSourceView[]; confidenceFilter: 'all' | 'high' | 'medium' | 'low'; onClearConfidenceFilter: () => void }) {
   const [q, setQ] = useState('')
   const [validOnly, setValidOnly] = useState(false)
 
   const fieldNames = fields.map((f) => f.name)
   const filtered = items.filter((it) => {
     if (validOnly && !it.valid) return false
+    if (confidenceFilter === 'high' && it.confidence < 75) return false
+    if (confidenceFilter === 'medium' && (it.confidence < 50 || it.confidence >= 75)) return false
+    if (confidenceFilter === 'low' && it.confidence >= 50) return false
     if (!q) return true
     const blob = (it.title + ' ' + it.summary + ' ' + JSON.stringify(it.data)).toLowerCase()
     return blob.includes(q.toLowerCase())
@@ -458,6 +475,23 @@ function DataTab({ items, fields, sources }: { items: DataItemView[]; fields: an
 
   return (
     <div className="space-y-3">
+      {/* Confidence filter banner (shown when a bucket filter is active) */}
+      {confidenceFilter !== 'all' && (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 animate-fade-in-up">
+          <div className="flex items-center gap-2 text-xs">
+            <Gauge className={cn('h-3.5 w-3.5', confidenceFilter === 'high' ? 'text-emerald-500' : confidenceFilter === 'medium' ? 'text-amber-500' : 'text-red-500')} />
+            <span className="font-medium">Filtered by confidence:</span>
+            <Badge variant="outline" className={cn('text-[10px] py-0 px-1.5 capitalize', confidenceFilter === 'high' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20' : confidenceFilter === 'medium' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20' : 'bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/20')}>
+              {confidenceFilter} ({confidenceFilter === 'high' ? '≥75%' : confidenceFilter === 'medium' ? '50-74%' : '<50%'})
+            </Badge>
+            <span className="text-muted-foreground">· {filtered.length} match{filtered.length !== 1 ? 'es' : ''}</span>
+          </div>
+          <Button size="sm" variant="ghost" onClick={onClearConfidenceFilter} className="h-7 text-xs">
+            Clear filter
+          </Button>
+        </div>
+      )}
+
       {/* Filter bar */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 flex-1 min-w-48">

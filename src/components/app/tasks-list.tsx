@@ -502,7 +502,7 @@ function TaskRow({
               <span className="flex items-center gap-1"><Database className="h-3 w-3" /> {fmtNum(task.stats?.items ?? task.itemCount)} records</span>
               <span className="flex items-center gap-1"><Globe className="h-3 w-3" /> {fmtNum(task.stats?.sources ?? task.sourceCount)} sources</span>
               {view === 'active' && task.status === 'completed' && task.confidenceBuckets && (
-                <MiniConfidenceBar buckets={task.confidenceBuckets} />
+                <MiniConfidenceBar buckets={task.confidenceBuckets} taskId={task.id} />
               )}
               {task.tags.slice(0, 3).map((tg) => (
                 <Badge key={tg} variant="outline" className="text-[10px] py-0 px-1.5 bg-muted/40">{tg}</Badge>
