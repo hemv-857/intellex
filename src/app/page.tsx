@@ -31,6 +31,7 @@ import { InsightsModal } from '@/components/app/insights-modal'
 import { TemplatePicker } from '@/components/app/template-picker'
 import { CompareModal } from '@/components/app/compare-modal'
 import { ShortcutCheatSheet } from '@/components/app/shortcut-cheatsheet'
+import { OnboardingTour, useReplayTour } from '@/components/app/onboarding-tour'
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
 import { api, type TaskListItem } from '@/components/app/shared'
 import { cn } from '@/lib/utils'
@@ -82,6 +83,8 @@ export default function Home() {
   const handleThemeChange = useCallback((t: Theme) => {
     setTheme(t)
   }, [setTheme])
+
+  const replayTour = useReplayTour()
 
   // Keyboard shortcuts
   useKeyboardShortcuts({
@@ -332,6 +335,7 @@ export default function Home() {
       }} />
       <CompareModal open={compareOpen} onOpenChange={setCompareOpen} tasks={allTasks} />
       <ShortcutCheatSheet open={cheatsheetOpen} onOpenChange={setCheatsheetOpen} />
+      <OnboardingTour />
     </div>
   )
 }

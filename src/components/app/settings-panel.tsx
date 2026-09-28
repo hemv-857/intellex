@@ -260,6 +260,15 @@ export function SettingsPanel({ open, onOpenChange, onThemeChange }: SettingsPan
               <div className="flex justify-between"><span>Engine</span><span className="text-foreground">Z.ai SDK</span></div>
               <div className="flex justify-between"><span>Database</span><span className="text-foreground">SQLite</span></div>
             </div>
+            <button
+              onClick={() => {
+                try { localStorage.removeItem('intellex.onboarding.v1') } catch {}
+                window.location.reload()
+              }}
+              className="w-full flex items-center justify-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 transition-colors"
+            >
+              <Sparkles className="h-3.5 w-3.5" /> Replay onboarding tour
+            </button>
           </section>
         </div>
 

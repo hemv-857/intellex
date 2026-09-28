@@ -721,3 +721,45 @@ Stage Summary:
 - Onboarding tour for first-time users.
 - Export the comparison as a PDF/image.
 - Bulk duplicate (clone N tasks at once via the bulk action bar).
+
+---
+
+## Phase 11: Onboarding Tour for First-Time Users (webDevReview round 7)
+
+### QA assessment
+- Lint clean. Found dev server kept exiting after first request (environment-level
+  instability — resolved by relaunching; not a code issue).
+- All prior features stable.
+- Picked next-phase item: "Onboarding tour for first-time users".
+
+### Implemented
+
+#### Onboarding tour (first-time users)
+- New `<OnboardingTour>` component (`src/components/app/onboarding-tour.tsx`):
+  - 7-step guided tour covering: welcome → describe prompt → run collection →
+    explore dataset → semantic search → keyboard shortcuts → you're set.
+  - Gated on localStorage (`intellex.onboarding.v1`) — shows automatically on first
+    visit (800ms delay after first paint), dismissible, never re-shows.
+  - Premium visuals: gradient header icon, top progress bar, clickable step dots,
+    Back/Next buttons, "N of 7" position, backdrop blur overlay, "Got it" on last
+    step.
+  - Exports `useReplayTour()` hook to re-trigger the tour (clears flag + reloads).
+- Wired into `page.tsx` — renders `<OnboardingTour />` at the root.
+- "Replay onboarding tour" button added to the Settings panel About section
+  (emerald-accented, clears the flag + reloads).
+- Verified via Agent Browser: cleared localStorage flag → tour appeared with
+  "Welcome to Intellex 👋" heading + Next button; clicked Next → advanced to
+  "1. Describe what you need" with Back button + "2 of 7" position. VLM rated
+  visual polish **8/10** (confirmed progress bar, step dots, Back/Next nav).
+- Zero console errors; lint clean; TypeScript type-check clean.
+
+### Files
+- Created: `src/components/app/onboarding-tour.tsx` (OnboardingTour + useReplayTour).
+- Modified: `src/app/page.tsx` (import + render OnboardingTour, replayTour handler),
+  `src/components/app/settings-panel.tsx` ("Replay onboarding tour" button in About).
+
+### Next-phase recommendations
+- Per-task mini sparkline on task cards.
+- Export the comparison as a PDF/image.
+- Bulk duplicate (clone N tasks at once via the bulk action bar).
+- Spotlight-style element highlighting in the tour (point at real UI elements).
