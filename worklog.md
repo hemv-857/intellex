@@ -556,3 +556,64 @@ Stage Summary:
 - Show pinned count on Dashboard hero stat too.
 - Add "Compare" action to command palette.
 - Export the comparison as a PDF/image.
+
+---
+
+## Phase 8: Quality Trend Sparkline + Compare/Templates/Insights in Command Palette + Dashboard Pinned Count (webDevReview round 4)
+
+### QA assessment
+- Lint clean, dev server healthy, zero console errors (only pre-existing a11y
+  warnings about DialogContent aria-describedby — cosmetic, non-blocking).
+- Dashboard, Sources, History all stable.
+- Picked three next-phase items from Phase 7 recommendations.
+
+### Implemented
+
+#### 1. Quality-score trend sparkline in Insights modal
+- `GET /api/insights` now returns `qualityTrend`: per-day average quality score
+  over the last 14 days (computes the same validity×50 + sourceCoverage×25 +
+  (1-dup)×25 formula per task, averaged per day, with task count).
+- Insights modal now has a "Quality-score trend" section with an emerald AreaChart
+  (gradient fill, 0-100 Y-axis, date X-axis, dots, tooltip showing score + task count).
+  Empty-state message when no completed tasks in the window.
+- Verified: real data shows peaks on 09-22 (96), 09-23, 09-25. VLM confirmed chart
+  rendered with visible line/area + axis labels.
+
+#### 2. Compare / Insights / Templates in Command Palette (⌘K)
+- `<CommandPalette>` now accepts `onOpenCompare`, `onOpenInsights`,
+  `onOpenTemplates` optional props and adds three new Actions:
+  - "Compare Tasks" (GitCompare icon, keywords: diff, vs, side-by-side)
+  - "Open Data Quality Insights" (TrendingUp icon, keywords: stats, quality, chart)
+  - "Open Prompt Templates" (FileText icon, keywords: presets, saved)
+- Wired in `page.tsx`: all three open their respective modals.
+- Verified: ⌘K → all 6 action commands visible (Compare, Insights, Templates,
+  Settings, Activity, Toggle Theme); clicking "Compare Tasks" opens the Compare modal.
+
+#### 3. Pinned count on Dashboard hero stat
+- `GET /api/stats` now returns `pinnedTasks` count (excludes trashed) and the
+  recent-tasks query now filters out trashed + sorts pinned-first.
+- Dashboard "Total Tasks" stat card sub-text now shows "N planned · M pinned"
+  when there are pinned tasks.
+- Verified: card shows "0 planned · 1 pinned".
+
+### Files
+- Modified: `src/app/api/insights/route.ts` (qualityTrend + createdAt select),
+  `src/components/app/insights-modal.tsx` (AreaChart trend section + type),
+  `src/components/app/command-palette.tsx` (3 new action commands + props + imports),
+  `src/app/page.tsx` (pass onOpenCompare/Insights/Templates to palette),
+  `src/app/api/stats/route.ts` (pinnedTasks + trashed filtering + pinned-first sort),
+  `src/components/app/dashboard.tsx` (pinned count in Total Tasks sub),
+  `src/components/app/shared.tsx` (DashboardStats.counts.pinnedTasks?).
+
+### Verified
+- Insights sparkline: VLM confirmed rendered with green area, 0-100 axis, date axis,
+  data peaks on 09-22/23/25.
+- Command palette: all 6 action commands present; "Compare Tasks" opens modal.
+- Dashboard: "Total Tasks" card shows "0 planned · 1 pinned".
+- Zero console errors (only pre-existing a11y warnings); lint clean.
+
+### Next-phase recommendations
+- Export the comparison as a PDF/image.
+- Add a "Recently used templates" quick-pick row.
+- Show quality trend per-task (mini sparkline on task cards).
+- Add keyboard shortcut cheat-sheet modal (? could open a help dialog).

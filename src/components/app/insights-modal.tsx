@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import { BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Area, AreaChart } from 'recharts'
 import {
   Dialog,
   DialogContent,
@@ -34,6 +34,7 @@ interface Insights {
   fieldCompleteness: { field: string; filled: number; total: number; rate: number }[]
   sourceReliability: { hostName: string; fetched: number; failed: number; rate: number }[]
   topTags: { tag: string; count: number }[]
+  qualityTrend: { date: string; avgScore: number; tasks: number }[]
 }
 
 const CHART_COLORS = ['#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#8b5cf6', '#ec4899']
@@ -100,6 +101,47 @@ export function InsightsModal({ open, onOpenChange }: { open: boolean; onOpenCha
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Quality-score trend (sparkline) */}
+                <div className="rounded-xl border border-border bg-card p-4">
+                  <h3 className="text-sm font-medium mb-1 flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-emerald-500" /> Quality-score trend
+                  </h3>
+                  <p className="text-[10px] text-muted-foreground mb-3">Average data-quality score per day (last 14 days)</p>
+                  <div className="h-32">
+                    {data.qualityTrend && data.qualityTrend.some((d) => d.avgScore > 0) ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={data.qualityTrend} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="gQuality" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                              <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.9 0 0 / 0.5)" vertical={false} />
+                          <XAxis
+                            dataKey="date"
+                            tickFormatter={(d) => d.slice(5)}
+                            tick={{ fontSize: 10, fill: 'oklch(0.5 0 0)' }}
+                            axisLine={false}
+                            tickLine={false}
+                            interval="preserveStartEnd"
+                          />
+                          <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'oklch(0.5 0 0)' }} axisLine={false} tickLine={false} />
+                          <Tooltip
+                            contentStyle={{ borderRadius: 10, border: '1px solid oklch(0.9 0 0)', fontSize: 12 }}
+                            formatter={(v: any, n: any) => [n === 'avgScore' ? `${v}/100` : v, n === 'avgScore' ? 'Quality' : 'Tasks']}
+                          />
+                          <Area type="monotone" dataKey="avgScore" name="avgScore" stroke="#10b981" strokeWidth={2} fill="url(#gQuality)" dot={{ r: 2, fill: '#10b981' }} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+                        No completed tasks in the last 14 days
+                      </div>
+                    )}
                   </div>
                 </div>
 

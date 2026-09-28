@@ -61,7 +61,7 @@ export function Dashboard({ onOpenTask, onNavigate }: DashboardProps) {
       icon: ListChecks,
       tint: 'from-emerald-500/15 to-emerald-500/5 text-emerald-600 dark:text-emerald-400',
       ring: 'ring-emerald-500/20',
-      sub: `${counts?.plannedTasks ?? 0} planned`,
+      sub: `${counts?.plannedTasks ?? 0} planned${(counts as any)?.pinnedTasks ? ` · ${counts.pinnedTasks} pinned` : ''}`,
     },
     {
       label: 'Active Runs',

@@ -25,7 +25,7 @@ export function GET() {
     // Pull all completed-task data items + their task's field schema + source URL.
     const tasks = await db.task.findMany({
       where: { status: 'completed' },
-      select: { id: true, fields: true, tags: true },
+      select: { id: true, fields: true, tags: true, stats: true, createdAt: true },
     })
     const taskIdSet = new Set(tasks.map((t) => t.id))
     if (taskIdSet.size === 0) {
@@ -140,6 +140,39 @@ export function GET() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 15)
 
+    // Quality-score trend over the last 14 days (per-day average quality of tasks completed that day)
+    const dayBuckets = new Map<string, { sum: number; count: number }>()
+    const today = new Date()
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(today)
+      d.setDate(d.getDate() - i)
+      const key = d.toISOString().slice(0, 10)
+      dayBuckets.set(key, { sum: 0, count: 0 })
+    }
+    for (const t of tasks) {
+      const key = t.createdAt.toISOString().slice(0, 10)
+      const bucket = dayBuckets.get(key)
+      if (!bucket) continue
+      const stats = safeObj(t.stats)
+      const items = Number(stats.items ?? 0) || 0
+      const valid = Number(stats.valid ?? 0) || 0
+      const sources = Number(stats.sources ?? 0) || 0
+      const dups = Number(stats.duplicates ?? 0) || 0
+      if (items > 0) {
+        const validityRate = valid / items
+        const dupPenalty = Math.min(1, dups / items)
+        const sourceCoverage = Math.min(1, sources / 8)
+        const score = Math.round(validityRate * 50 + sourceCoverage * 25 + (1 - dupPenalty) * 25)
+        bucket.sum += score
+        bucket.count++
+      }
+    }
+    const qualityTrend = [...dayBuckets.entries()].map(([date, b]) => ({
+      date,
+      avgScore: b.count > 0 ? Math.round(b.sum / b.count) : 0,
+      tasks: b.count,
+    }))
+
     return NextResponse.json({
       totalRecords,
       validRecords,
@@ -150,6 +183,7 @@ export function GET() {
       fieldCompleteness,
       sourceReliability,
       topTags,
+      qualityTrend,
     })
   })
 }
@@ -165,5 +199,6 @@ function emptyInsights() {
     fieldCompleteness: [] as Array<{ field: string; filled: number; total: number; rate: number }>,
     sourceReliability: [] as Array<{ hostName: string; fetched: number; failed: number; rate: number }>,
     topTags: [] as Array<{ tag: string; count: number }>,
+    qualityTrend: [] as Array<{ date: string; avgScore: number; tasks: number }>,
   }
 }

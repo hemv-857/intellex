@@ -18,6 +18,9 @@ import {
   Trash2,
   Settings,
   Bell,
+  GitCompare,
+  TrendingUp,
+  FileText,
 } from 'lucide-react'
 import {
   Dialog,
@@ -50,6 +53,9 @@ interface CommandPaletteProps {
   onToggleTheme: () => void
   onOpenSettings: () => void
   onOpenActivity: () => void
+  onOpenCompare?: () => void
+  onOpenInsights?: () => void
+  onOpenTemplates?: () => void
   activeTaskId?: string | null
   hasActiveTask: boolean
 }
@@ -62,6 +68,9 @@ export function CommandPalette({
   onToggleTheme,
   onOpenSettings,
   onOpenActivity,
+  onOpenCompare,
+  onOpenInsights,
+  onOpenTemplates,
   hasActiveTask,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState('')
@@ -75,6 +84,9 @@ export function CommandPalette({
     { id: 'nav-datasets', label: 'Go to Datasets', icon: Database, section: 'Navigation', action: () => onNavigate('datasets'), keywords: ['search', 'data'] },
     { id: 'nav-sources', label: 'Go to Sources', icon: Globe, section: 'Navigation', action: () => onNavigate('sources') },
     { id: 'nav-history', label: 'Go to History', icon: History, section: 'Navigation', action: () => onNavigate('history') },
+    ...(onOpenCompare ? [{ id: 'action-compare', label: 'Compare Tasks', icon: GitCompare, section: 'Actions', action: onOpenCompare, keywords: ['diff', 'vs', 'side-by-side'] }] : []),
+    ...(onOpenInsights ? [{ id: 'action-insights', label: 'Open Data Quality Insights', icon: TrendingUp, section: 'Actions', action: onOpenInsights, keywords: ['stats', 'quality', 'chart'] }] : []),
+    ...(onOpenTemplates ? [{ id: 'action-templates', label: 'Open Prompt Templates', icon: FileText, section: 'Actions', action: onOpenTemplates, keywords: ['presets', 'saved'] }] : []),
     { id: 'action-settings', label: 'Open Settings', icon: Settings, section: 'Actions', action: onOpenSettings, keywords: ['preferences', 'config'] },
     { id: 'action-activity', label: 'View Activity & Notifications', icon: Bell, section: 'Actions', action: onOpenActivity, keywords: ['log', 'audit', 'history'] },
     {

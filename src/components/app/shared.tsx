@@ -94,6 +94,7 @@ export interface DashboardStats {
     completedTasks: number
     failedTasks: number
     plannedTasks: number
+    pinnedTasks?: number
     totalItems: number
     totalSources: number
     validItems: number

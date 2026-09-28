@@ -300,6 +300,9 @@ export default function Home() {
         onToggleTheme={toggleTheme}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenActivity={() => setActivityOpen(true)}
+        onOpenCompare={() => setCompareOpen(true)}
+        onOpenInsights={() => setInsightsOpen(true)}
+        onOpenTemplates={() => setTemplatesOpen(true)}
         activeTaskId={activeTaskId}
         hasActiveTask={hasActiveTask}
       />

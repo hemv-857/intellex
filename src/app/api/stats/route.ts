@@ -12,21 +12,23 @@ function safeArr(s?: string | null): any[] {
 
 // GET /api/stats -> dashboard overview
 export async function GET() {
-  const [totalTasks, runningTasks, completedTasks, failedTasks, plannedTasks] = await Promise.all([
-    db.task.count(),
-    db.task.count({ where: { status: 'running' } }),
-    db.task.count({ where: { status: 'completed' } }),
-    db.task.count({ where: { status: 'failed' } }),
-    db.task.count({ where: { status: 'planned' } }),
+  const [totalTasks, runningTasks, completedTasks, failedTasks, plannedTasks, pinnedTasks] = await Promise.all([
+    db.task.count({ where: { trashedAt: null } }),
+    db.task.count({ where: { status: 'running', trashedAt: null } }),
+    db.task.count({ where: { status: 'completed', trashedAt: null } }),
+    db.task.count({ where: { status: 'failed', trashedAt: null } }),
+    db.task.count({ where: { status: 'planned', trashedAt: null } }),
+    db.task.count({ where: { pinned: true, trashedAt: null } }),
   ])
 
   const totalItems = await db.dataItem.count()
   const totalSources = await db.dataSource.count()
   const validItems = await db.dataItem.count({ where: { valid: true } })
 
-  // recent tasks
+  // recent tasks (exclude trashed)
   const recent = await db.task.findMany({
-    orderBy: { createdAt: 'desc' },
+    where: { trashedAt: null },
+    orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }],
     take: 6,
     include: { _count: { select: { dataItems: true, sources: true } } },
   })
@@ -81,7 +83,7 @@ export async function GET() {
   const tagDist = [...tagMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([tag, count]) => ({ tag, count }))
 
   return NextResponse.json({
-    counts: { totalTasks, runningTasks, completedTasks, failedTasks, plannedTasks, totalItems, totalSources, validItems, tokens },
+    counts: { totalTasks, runningTasks, completedTasks, failedTasks, plannedTasks, pinnedTasks, totalItems, totalSources, validItems, tokens },
     recent: recent.map((t) => ({
       id: t.id,
       title: t.title,
