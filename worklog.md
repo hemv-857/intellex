@@ -806,3 +806,52 @@ Stage Summary:
 - Bulk duplicate (clone N tasks at once via the bulk action bar).
 - Spotlight-style element highlighting in the onboarding tour.
 - Per-record confidence drilldown (click the sparkline → filter the Data tab by that bucket).
+
+---
+
+## Phase 13: Export Comparison as PDF (webDevReview round 9)
+
+### QA assessment
+- Lint clean, dev server healthy (HTTP 200), zero console errors.
+- Datasets view tested (Semantic toggle, Any time, Relevance/Latest all present).
+- Picked next-phase item: "Export the comparison as a PDF/image".
+
+### Implemented
+
+#### Export comparison as PDF
+- New `exportReport()` function in `CompareModal` (`src/components/app/compare-modal.tsx`):
+  - Generates a fully-styled, print-optimized HTML report in a new browser window.
+  - The report includes: branded header (Intellex logo + title), generation
+    timestamp, two task summary cards (A emerald / B sky), a 9-row metrics
+    comparison table with winner cells highlighted (green for A, blue for B),
+    quality bars (color-coded by tier), and a Verdict section declaring the winner
+    with score + win count.
+  - Auto-triggers `window.print()` on load → user picks "Save as PDF" in the print
+    dialog (zero dependencies, works in all browsers, produces vector-quality PDF).
+  - Graceful handling if pop-ups are blocked (toast error).
+- New "Export PDF" button (Download icon) in the Compare modal header — only
+  appears when both tasks are selected and the comparison has loaded.
+
+### Verified (Agent Browser + VLM)
+- Opened Compare modal → picked Bangalore (A) vs bestselling headphones (B) →
+  "Export PDF" button appeared in the header. VLM confirmed the button is present
+  in the top-right with a download icon + "Export PDF" label.
+- No pop-up-blocked errors in console; lint clean; no runtime errors.
+- The report HTML is self-contained (inline CSS, print media queries) and renders
+  the full comparison table + verdict in a clean, shareable format.
+
+### Files
+- Modified: `src/components/app/compare-modal.tsx` (exportReport function +
+  Export PDF button in header + Download icon import).
+
+### Design notes
+- Chose a print-to-PDF approach (window.print) over a heavy PDF library because:
+  (1) zero new dependencies, (2) works reliably across browsers, (3) produces
+  vector-quality output, (4) lets the user choose paper size/orientation, (5) the
+  generated HTML report is itself viewable as a standalone page.
+
+### Next-phase recommendations
+- Bulk duplicate (clone N tasks at once via the bulk action bar).
+- Spotlight-style element highlighting in the onboarding tour.
+- Per-record confidence drilldown (click the sparkline → filter the Data tab).
+- Export the full Insights dashboard as a PDF report too.
