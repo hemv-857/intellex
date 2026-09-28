@@ -617,3 +617,61 @@ Stage Summary:
 - Add a "Recently used templates" quick-pick row.
 - Show quality trend per-task (mini sparkline on task cards).
 - Add keyboard shortcut cheat-sheet modal (? could open a help dialog).
+
+---
+
+## Phase 9: Keyboard Shortcut Cheat-Sheet + Recently-Used Prompts (webDevReview round 5)
+
+### QA assessment
+- Lint clean, dev server healthy, zero console errors (only pre-existing a11y
+  aria-describedby warnings — cosmetic).
+- New Collection flow tested end-to-end: prompt → Generate Workflow → plan
+  rendered. All stable.
+- Picked two next-phase items: keyboard shortcut cheat-sheet modal + recently-used
+  templates/prompts quick-pick.
+
+### Implemented
+
+#### 1. Keyboard shortcut cheat-sheet modal (press `?` or `/`)
+- New `<ShortcutCheatSheet>` component (`src/components/app/shortcut-cheatsheet.tsx`):
+  - Grouped sections: Global (⌘K, ?, Esc), Navigation (g+d/n/t/a/s/h vim-style),
+    Actions (n, comma, b, p, i, c).
+  - Each shortcut shows styled `<kbd>` key badges + label + description.
+  - Pro-tip footer card explaining ⌘K.
+- New keyboard shortcut: `?` or `/` opens the cheat sheet (was previously mapped
+  to the command palette — now dedicated). Also added `c` → open Compare.
+- Added `onOpenCompare` + `onOpenCheatSheet` to the shortcuts hook + page wiring.
+- Added a "Shortcuts" button with `?` kbd badge in the footer (desktop) for
+  discoverability.
+- Verified: pressing `?` opens the modal with all 3 groups rendered. VLM rated
+  visual polish **8/10**.
+
+#### 2. Recently-used prompts quick-pick row (New Collection page)
+- New Collection page now tracks used prompts in localStorage
+  (`intellex.recentPrompts`, max 4) — recorded when a template is applied OR when
+  the user clicks "Generate Workflow".
+- New "Recently used — click to reuse" row appears above "Example prompts" (only
+  when there are recent prompts). Each is an emerald-accented pill chip showing
+  the prompt text; clicking refills the textarea.
+- Verified: generated a workflow with a RAG-papers prompt → clicked "Start over"
+  → "Recently used" row appeared with that prompt as an emerald pill. VLM confirmed.
+
+### Files
+- Created: `src/components/app/shortcut-cheatsheet.tsx`.
+- Modified: `src/hooks/use-keyboard-shortcuts.ts` (+onOpenCompare, +onOpenCheatSheet,
+  `c` → Compare, `?`/`/` → CheatSheet), `src/app/page.tsx` (cheatsheetOpen state +
+  event listener + modal + footer "Shortcuts" button + pass new handlers to
+  palette/shortcuts), `src/components/app/new-task.tsx` (recentPrompts tracking in
+  localStorage on prefill + generate; "Recently used" UI row).
+
+### Verified
+- `?` opens cheat sheet → 3 groups (Global/Navigation/Actions) with kbd badges. VLM 8/10.
+- Generated RAG-papers workflow → "Start over" → "Recently used" row with emerald
+  pill of the used prompt. VLM confirmed.
+- Zero console errors; lint clean.
+
+### Next-phase recommendations
+- Export the comparison as a PDF/image.
+- Per-task mini sparkline on task cards.
+- Add a "Duplicate task" action (clone prompt + schema).
+- Onboarding tour for first-time users.

@@ -12,6 +12,8 @@ interface ShortcutHandlers {
   onOpenActivity: () => void
   onOpenTemplates: () => void
   onOpenInsights: () => void
+  onOpenCompare: () => void
+  onOpenCheatSheet: () => void
   onToggleTheme: () => void
 }
 
@@ -60,7 +62,8 @@ export function useKeyboardShortcuts(h: ShortcutHandlers) {
       else if (k === 'b') { e.preventDefault(); h.onOpenActivity() }
       else if (k === 'p') { e.preventDefault(); h.onOpenTemplates() }
       else if (k === 'i') { e.preventDefault(); h.onOpenInsights() }
-      else if (k === '?') { e.preventDefault(); h.onOpenCommandPalette() }
+      else if (k === 'c') { e.preventDefault(); h.onOpenCompare() }
+      else if (k === '?' || k === '/') { e.preventDefault(); h.onOpenCheatSheet() }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)

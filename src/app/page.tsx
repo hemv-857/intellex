@@ -30,6 +30,7 @@ import { SettingsPanel, type Theme } from '@/components/app/settings-panel'
 import { InsightsModal } from '@/components/app/insights-modal'
 import { TemplatePicker } from '@/components/app/template-picker'
 import { CompareModal } from '@/components/app/compare-modal'
+import { ShortcutCheatSheet } from '@/components/app/shortcut-cheatsheet'
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
 import { api, type TaskListItem } from '@/components/app/shared'
 import { cn } from '@/lib/utils'
@@ -59,6 +60,7 @@ export default function Home() {
   const [insightsOpen, setInsightsOpen] = useState(false)
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [compareOpen, setCompareOpen] = useState(false)
+  const [cheatsheetOpen, setCheatsheetOpen] = useState(false)
   const [allTasks, setAllTasks] = useState<TaskListItem[]>([])
 
   const { setTheme, resolvedTheme } = useTheme()
@@ -90,6 +92,8 @@ export default function Home() {
     onOpenActivity: () => setActivityOpen(true),
     onOpenTemplates: () => setTemplatesOpen(true),
     onOpenInsights: () => setInsightsOpen(true),
+    onOpenCompare: () => setCompareOpen(true),
+    onOpenCheatSheet: () => setCheatsheetOpen(true),
     onToggleTheme: toggleTheme,
   })
 
@@ -100,17 +104,20 @@ export default function Home() {
     const openActivity = () => setActivityOpen(true)
     const openSettings = () => setSettingsOpen(true)
     const openCompare = () => setCompareOpen(true)
+    const openCheatsheet = () => setCheatsheetOpen(true)
     window.addEventListener('intellex:open-templates', openTemplates)
     window.addEventListener('intellex:open-insights', openInsights)
     window.addEventListener('intellex:open-activity', openActivity)
     window.addEventListener('intellex:open-settings', openSettings)
     window.addEventListener('intellex:open-compare', openCompare)
+    window.addEventListener('intellex:open-cheatsheet', openCheatsheet)
     return () => {
       window.removeEventListener('intellex:open-templates', openTemplates)
       window.removeEventListener('intellex:open-insights', openInsights)
       window.removeEventListener('intellex:open-activity', openActivity)
       window.removeEventListener('intellex:open-settings', openSettings)
       window.removeEventListener('intellex:open-compare', openCompare)
+      window.removeEventListener('intellex:open-cheatsheet', openCheatsheet)
     }
   }, [])
 
@@ -285,6 +292,15 @@ export default function Home() {
           <div className="flex items-center gap-3">
             <button onClick={() => setPaletteOpen(true)} className="hover:text-foreground transition-colors">Prompt → Plan → Collect → Clean → Export</button>
             <span className="hidden lg:inline text-muted-foreground/40">·</span>
+            <button
+              onClick={() => setCheatsheetOpen(true)}
+              className="hidden sm:inline-flex items-center gap-1 hover:text-foreground transition-colors"
+              title="Keyboard shortcuts (?)"
+            >
+              <kbd className="inline-flex h-4 items-center rounded border border-border bg-muted px-1 text-[9px] font-mono">?</kbd>
+              Shortcuts
+            </button>
+            <span className="hidden lg:inline text-muted-foreground/40">·</span>
             <span className="hidden lg:inline">v2.0 · Built with Next.js · Z.ai SDK</span>
           </div>
         </div>
@@ -315,6 +331,7 @@ export default function Home() {
         window.dispatchEvent(new CustomEvent('intellex:prefill-prompt', { detail: prompt }))
       }} />
       <CompareModal open={compareOpen} onOpenChange={setCompareOpen} tasks={allTasks} />
+      <ShortcutCheatSheet open={cheatsheetOpen} onOpenChange={setCheatsheetOpen} />
     </div>
   )
 }

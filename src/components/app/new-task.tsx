@@ -17,6 +17,7 @@ import {
   Wand2,
   CheckCircle2,
   LayoutTemplate,
+  Clock,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -76,11 +77,30 @@ export function NewTask({ onCreated, onCancel, onOpenTemplates }: NewTaskProps) 
       if (detail) {
         setPrompt(detail)
         setPlan(null)
+        // Track recently-used prompts
+        try {
+          const stored = JSON.parse(localStorage.getItem('intellex.recentPrompts') || '[]') as { prompt: string; ts: number }[]
+          const filtered = stored.filter((s) => s.prompt !== detail)
+          const next = [{ prompt: detail, ts: Date.now() }, ...filtered].slice(0, 4)
+          localStorage.setItem('intellex.recentPrompts', JSON.stringify(next))
+        } catch {
+          /* ignore */
+        }
       }
     }
     window.addEventListener('intellex:prefill-prompt', handler)
     return () => window.removeEventListener('intellex:prefill-prompt', handler)
   }, [])
+
+  const [recentPrompts, setRecentPrompts] = useState<{ prompt: string; ts: number }[]>([])
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('intellex.recentPrompts') || '[]') as { prompt: string; ts: number }[]
+      setRecentPrompts(stored)
+    } catch {
+      /* ignore */
+    }
+  }, [prompt]) // refresh when prompt changes (i.e. after a use)
 
   const handlePlan = async () => {
     if (prompt.trim().length < 10) {
@@ -96,6 +116,16 @@ export function NewTask({ onCreated, onCancel, onOpenTemplates }: NewTaskProps) 
       })
       setPlan(res.task)
       toast.success('Workflow designed by AI.')
+      // Track recently-used prompt
+      try {
+        const stored = JSON.parse(localStorage.getItem('intellex.recentPrompts') || '[]') as { prompt: string; ts: number }[]
+        const filtered = stored.filter((s) => s.prompt !== prompt)
+        const next = [{ prompt, ts: Date.now() }, ...filtered].slice(0, 4)
+        localStorage.setItem('intellex.recentPrompts', JSON.stringify(next))
+        setRecentPrompts(next)
+      } catch {
+        /* ignore */
+      }
     } catch (e) {
       toast.error((e as Error).message || 'Failed to design workflow')
     } finally {
@@ -172,6 +202,31 @@ export function NewTask({ onCreated, onCancel, onOpenTemplates }: NewTaskProps) 
           </div>
         </CardContent>
       </Card>
+
+      {/* Recently used prompts */}
+      {!plan && !planning && recentPrompts.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Clock className="h-3.5 w-3.5 text-emerald-500" />
+            <h3 className="text-xs font-medium">Recently used</h3>
+            <span className="text-[10px] text-muted-foreground">— click to reuse</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {recentPrompts.map((r, i) => (
+              <button
+                key={i}
+                onClick={() => setPrompt(r.prompt)}
+                className="group max-w-md text-left rounded-lg border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10 hover:border-emerald-500/40 transition-all px-3 py-1.5"
+                title={r.prompt}
+              >
+                <span className="text-[11px] text-foreground/80 truncate inline-block max-w-xs align-middle">
+                  {r.prompt}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Examples */}
       {!plan && !planning && (
