@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  macOS launchd driver for the Intellex scheduler.
+
+  Install:
+    cp scripts/launchd/com.hemang.intellex-scheduler.plist ~/Library/LaunchAgents/
+    launchctl load  ~/Library/LaunchAgents/com.hemang.intellex-scheduler.plist
+
+  Logs to /tmp/intellex-scheduler.log. Replace REPO_PATH and INTELLEX_URL.
+  The script reads SCHEDULER_KEY from the repo .env when it is not in the
+  environment, so nothing secret needs to live in this plist.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.hemang.intellex-scheduler</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>REPO_PATH/scripts/scheduler-tick.sh</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>INTELLEX_URL</key>
+    <string>http://localhost:3000</string>
+  </dict>
+  <key>StartInterval</key>
+  <integer>60</integer>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>StandardOutPath</key>
+  <string>/tmp/intellex-scheduler.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/intellex-scheduler.log</string>
+</dict>
+</plist>

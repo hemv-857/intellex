@@ -8,7 +8,9 @@ const csp = [
   "default-src 'self'",
   // Next injects inline bootstrap scripts; 'unsafe-inline' is required for those
   // and is why frame-ancestors/base-uri/object-src are pinned explicitly below.
-  "script-src 'self' 'unsafe-inline'",
+  // React's development build additionally needs eval() (production does not),
+  // so that allowance is dev-only rather than shipped.
+  `script-src 'self' 'unsafe-inline'${isProd ? '' : " 'unsafe-eval'"}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https:",
   "font-src 'self' data:",
@@ -18,7 +20,7 @@ const csp = [
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
-  'upgrade-insecure-requests',
+  ...(isProd ? ['upgrade-insecure-requests'] : []),
 ].join('; ')
 
 const nextConfig: NextConfig = {

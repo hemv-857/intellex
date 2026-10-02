@@ -150,6 +150,7 @@ export function TaskDetailView({ taskId, onBack, onDelete }: TaskDetailProps) {
   }
 
   const handleSaveTemplate = async () => {
+    if (!task) return
     const name = window.prompt('Template name:', task.title)
     if (!name || name.trim().length < 2) return
     try {

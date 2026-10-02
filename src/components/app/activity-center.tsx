@@ -27,7 +27,8 @@ import {
   Bell,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { api, timeAgo, type Section } from './shared'
+import { api, timeAgo } from './shared'
+import { type Section } from './sidebar'
 import type { LucideIcon } from 'lucide-react'
 
 interface ActivityItem {

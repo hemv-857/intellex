@@ -490,7 +490,7 @@ function TaskRow({
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-amber-400 to-amber-500 transition-all animate-pulse"
                     style={{
-                      width: `${progress.total ? Math.min(100, (progress.current / progress.total) * 100) : 30}%`,
+                      width: `${progress.total ? Math.min(100, ((progress.current ?? 0) / progress.total) * 100) : 30}%`,
                     }}
                   />
                 </div>

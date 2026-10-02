@@ -30,7 +30,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { api, type DashboardStats, type Section, fmtNum, fmtDate, timeAgo, StatusBadge, statusDotClass } from './shared'
+import { api, type DashboardStats, fmtNum, fmtDate, timeAgo, StatusBadge, statusDotClass } from './shared'
+import { type Section } from './sidebar'
 
 interface DashboardProps {
   onOpenTask: (id: string) => void
@@ -61,7 +62,7 @@ export function Dashboard({ onOpenTask, onNavigate }: DashboardProps) {
       icon: ListChecks,
       tint: 'from-emerald-500/15 to-emerald-500/5 text-emerald-600 dark:text-emerald-400',
       ring: 'ring-emerald-500/20',
-      sub: `${counts?.plannedTasks ?? 0} planned${(counts as any)?.pinnedTasks ? ` · ${counts.pinnedTasks} pinned` : ''}`,
+      sub: `${counts?.plannedTasks ?? 0} planned${counts?.pinnedTasks ? ` · ${counts.pinnedTasks} pinned` : ''}`,
     },
     {
       label: 'Active Runs',

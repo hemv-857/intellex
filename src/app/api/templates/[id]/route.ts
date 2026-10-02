@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { safeApi } from '@/lib/api-utils'
+import { safeApi, rateLimit } from '@/lib/api-utils'
 
 // GET /api/templates/[id] -> one template
 export function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -24,6 +24,15 @@ export function GET(_req: NextRequest, { params }: { params: Promise<{ id: strin
     })
   })
 }
+
+// POST /api/templates/[id] -> record a use (drives the "used Nx" badge)
+export const POST = rateLimit({ max: 60, key: 'template-use' })(async (_req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  const { id } = await params
+  const t = await db.template.findUnique({ where: { id }, select: { id: true } })
+  if (!t) return NextResponse.json({ error: 'Template not found' }, { status: 404 })
+  const updated = await db.template.update({ where: { id }, data: { useCount: { increment: 1 } }, select: { useCount: true } })
+  return NextResponse.json({ ok: true, useCount: updated.useCount })
+})
 
 // DELETE /api/templates/[id] -> refuse if isBuiltIn
 export function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

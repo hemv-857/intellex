@@ -16,8 +16,9 @@ export async function GET() {
 // POST /api/preferences — merge preferences
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
-  const { ok, error, data } = validateBody(schemas.preferences, body)
-  if (!ok) return NextResponse.json({ error }, { status: 400 })
+  const parsed = validateBody(schemas.preferences, body)
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
+  const data = parsed.data
 
   const row = await db.setting.findUnique({ where: { id: 'singleton' } })
   const current = row ? safeObj(row.preferences) : {}

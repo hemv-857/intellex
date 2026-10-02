@@ -21,16 +21,22 @@ Requires Bun and Node 20+.
 ```bash
 bun install
 
-cp .env.example .env    # then fill in DATABASE_URL and SCHEDULER_KEY
+cp .env.example .env    # then fill in APP_TOKEN, DATABASE_URL, SCHEDULER_KEY
 
-bun run db:generate
-bun run db:push     # creates db/custom.db and the schema
-bun run dev         # http://localhost:3000
+bun run db:deploy       # apply migrations (creates db/custom.db and the schema)
+bun run dev             # http://localhost:3000
 ```
 
-`DATABASE_URL` must point at a writable SQLite file. A relative `file:` value is resolved by Prisma against `prisma/schema.prisma`, so from the repo root use `file:../db/custom.db`. Generate a scheduler key with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
+`APP_TOKEN` is required — with it unset the API returns `503` and the UI shows an
+"Authentication not configured" screen, because a data platform with no auth is
+not something to expose to a network. Sign in at the prompt with that token; it is
+exchanged for an httpOnly session cookie.
 
-Other scripts: `bun run build`, `bun run start`, `bun run lint`, `bun test`, `bun run db:reset`.
+`DATABASE_URL` must point at a writable SQLite file. A relative `file:` value is resolved by Prisma against `prisma/schema.prisma`, so from the repo root use `file:../db/custom.db`.
+
+Generate secrets with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
+
+Other scripts: `bun run build`, `bun run start`, `bun run lint`, `bun test`, `bun run db:migrate` (create a migration), `bun run db:reset`.
 
 `.zscripts/` holds container-oriented helpers (`dev.sh`, `build.sh`, `start.sh`, mini-service and Python runtime builds). You do not need them for local development.
 
@@ -68,6 +74,7 @@ worklog.md            build + QA log, 14 phases, including root-cause notes on t
 | `GET` | `/api/datasets` · `/api/sources` · `/api/activity` | Cross-task explorers and audit feed |
 | `GET`/`POST` | `/api/templates`, `/api/templates/[id]`, `/api/templates/seed` | Prompt templates; six built-ins seeded idempotently |
 | `GET`/`POST` | `/api/preferences` | Singleton settings row |
+| `POST` | `/api/templates/[id]` | Record a template use (drives the "used N×" badge) |
 
 ## Features
 
@@ -85,18 +92,32 @@ worklog.md            build + QA log, 14 phases, including root-cause notes on t
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
+| `APP_TOKEN` | yes | Single-tenant access token. The whole `/api` surface is gated on it; unset means the API is **disabled** (`503`), never open |
 | `DATABASE_URL` | yes | SQLite file path |
+| `TRUST_PROXY` | no | Set to `1` **only** when a proxy (Caddy/nginx) sets `X-Forwarded-For`. Otherwise forwarding headers are ignored so a client cannot mint a fresh rate-limit bucket per request |
 | `SCHEDULER_KEY` | for scheduling | Shared secret for `/api/scheduler/*`. **Unset means the scheduler is disabled** — the endpoints return `503`, they do not fall back to a default |
 | `NEXT_PUBLIC_SCHEDULER_KEY` | for browser-triggered scheduling | Same value, exposed to the client so it can poll the tick |
 
-The scheduler endpoints are the only mutating routes that do not authenticate a user, so they **fail closed**: no configured key means no scheduling, and the comparison is timing-safe.
+The scheduler endpoints carry their own `SCHEDULER_KEY` and are deliberately exempt from the `APP_TOKEN` gate, so a cron driver only needs that one credential. They **fail closed**: no configured key means no scheduling, and the comparison is timing-safe.
 
-Because `NEXT_PUBLIC_*` values are inlined into the JS bundle, any visitor can read that key and trigger the tick themselves — the client-polling model makes the key public by design. For a deployed instance, drive `/api/scheduler/tick` from cron or a launchd timer with a real `SCHEDULER_KEY` and leave `NEXT_PUBLIC_SCHEDULER_KEY` unset, so the browser never holds it.
+The browser deliberately does **not** hold `SCHEDULER_KEY` — anything in `NEXT_PUBLIC_*` is inlined into the public JS bundle, so a client-side scheduler key is not a secret. Drive the scheduler from cron or launchd instead; `scripts/scheduler-tick.sh` is ready to use and documents the crontab line.
+
+## Durability
+
+Execution is still fire-and-forget in-process, but a run is no longer able to strand itself:
+
+- A run **claims a lease** (token + timestamp) with a single conditional update, so claiming is atomic rather than check-then-act.
+- The lease, not the status string, gates concurrency: a run that dies mid-flight stops blocking the task once its lease expires.
+- A **reaper** on every scheduler tick flips expired runs to `failed` with an explanatory message, so the UI stops spinning and the task is re-runnable.
+- Clearing the previous attempt and writing the new one is transactional.
+
+A durable job queue is still the right answer for production-scale reliability; the lease makes the current shape recoverable rather than corrupting.
 
 ## Known limitations
 
-- Collection execution is fire-and-forget inside the Next.js process. Fine for dev; a durable job queue is needed for production-grade reliability.
-- Scheduling is triggered by whoever polls the tick endpoint. Server-side cron (rather than browser polling) is the right shape for a deployment, and is not implemented here.
+- Scheduling requires an external cron/launchd driver (`scripts/scheduler-tick.sh`). There is no in-process scheduler.
+- Rate limiting is per-process and in-memory, so it does not span instances.
+- The quality score reads the denormalised `stats` blob written at run time; if it is missing the live row counts are used instead.
 - Rate limiting is per-IP and in-memory, so it resets on restart and does not span instances.
 - Tag filtering runs in memory rather than in SQL — fine at this scale, not at large row counts.
 - `page_reader` returns empty HTML for some JavaScript-heavy sites. Those sources are marked failed and the run continues.

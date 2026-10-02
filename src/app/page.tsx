@@ -334,7 +334,11 @@ function Intellex() {
       <ActivityCenter open={activityOpen} onOpenChange={setActivityOpen} onOpenTask={openTask} />
       <SettingsPanel open={settingsOpen} onOpenChange={setSettingsOpen} onThemeChange={handleThemeChange} />
       <InsightsModal open={insightsOpen} onOpenChange={setInsightsOpen} />
-      <TemplatePicker open={templatesOpen} onOpenChange={setTemplatesOpen} onUseTemplate={(prompt) => {
+      <TemplatePicker open={templatesOpen} onOpenChange={setTemplatesOpen} onUseTemplate={(prompt, templateId) => {
+        // usage was previously always 0, so the "used N×" badge could never render
+        if (templateId) {
+          api('/api/templates/' + templateId, { method: 'POST' }).catch(() => {})
+        }
         // navigate to new task and prefill — use a custom event
         navigate('new')
         window.dispatchEvent(new CustomEvent('intellex:prefill-prompt', { detail: prompt }))

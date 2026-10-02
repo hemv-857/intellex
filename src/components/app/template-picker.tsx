@@ -29,7 +29,7 @@ interface Template {
 interface TemplatePickerProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onUseTemplate: (prompt: string) => void
+  onUseTemplate: (prompt: string, templateId?: string) => void
 }
 
 export function TemplatePicker({ open, onOpenChange, onUseTemplate }: TemplatePickerProps) {
@@ -108,7 +108,7 @@ export function TemplatePicker({ open, onOpenChange, onUseTemplate }: TemplatePi
                           variant="default"
                           className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
                           onClick={() => {
-                            onUseTemplate(t.prompt)
+                            onUseTemplate(t.prompt, t.id)
                             onOpenChange(false)
                           }}
                         >

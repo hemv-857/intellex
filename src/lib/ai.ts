@@ -322,7 +322,7 @@ async function extractFromSource(
   const content = (snippet ? `Snippet: ${snippet}\n\n` : '') + (pageText || '')
 
   if (!content || content.trim().length < 40) {
-    return { records: [], tokens, title }
+    return { records: [], tokens, title, pageReadOk }
   }
 
   const completion = await zai.chat.completions.create({
@@ -532,27 +532,24 @@ export async function executeWorkflow(taskId: string): Promise<void> {
       // upsert rather than create: (taskId, dedupeKey) is now a real unique
       // constraint, so a replayed or concurrent run would otherwise throw and
       // abort the whole run half way through.
-      await db.dataItem.upsert({
-        where: { taskId_dedupeKey: { taskId, dedupeKey: key || null } },
-        create: {
-          taskId,
-          sourceId,
-          data: JSON.stringify(record),
-          title: itemTitle.slice(0, 300),
-          summary: summary.slice(0, 500),
-          confidence,
-          valid,
-          dedupeKey: key || null,
-        },
-        update: {
-          sourceId,
-          data: JSON.stringify(record),
-          title: itemTitle.slice(0, 300),
-          summary: summary.slice(0, 500),
-          confidence,
-          valid,
-        },
-      })
+      const payload = {
+        sourceId,
+        data: JSON.stringify(record),
+        title: itemTitle.slice(0, 300),
+        summary: summary.slice(0, 500),
+        confidence,
+        valid,
+      }
+      if (key) {
+        await db.dataItem.upsert({
+          where: { taskId_dedupeKey: { taskId, dedupeKey: key } },
+          create: { taskId, dedupeKey: key, ...payload },
+          update: payload,
+        })
+      } else {
+        // No dedupe key means nothing to dedupe against (all fields empty).
+        await db.dataItem.create({ data: { taskId, dedupeKey: null, ...payload } })
+      }
       if (valid) validCount++
       written++
     }
@@ -707,8 +704,8 @@ export function recencyBoost(contentDate: string | null, collectedAt: string): n
   const ref = contentDate ? new Date(contentDate).getTime() : new Date(collectedAt).getTime()
   if (isNaN(ref)) return 0
   const daysAgo = Math.max(0, (now - ref) / (1000 * 60 * 60 * 24))
-  // Exponential decay: 0 days ago → 100, 30 days ago → ~37, 90 days ago → ~8, 365 days ago → ~0
-  // score = 100 * e^(-days/30)
+  // Exponential decay with a 45-day half-life scale:
+  // score = 100 * e^(-days/45)  →  0d:100, 30d:~51, 90d:~14, 365d:~0.3
   const boost = 100 * Math.exp(-daysAgo / 45)
   return Math.round(boost)
 }

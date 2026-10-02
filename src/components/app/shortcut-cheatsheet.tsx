@@ -8,7 +8,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
-import { Keyboard, Command, ArrowUp, ArrowDown, CornerDownLeft, Esc } from 'lucide-react'
+import { Keyboard, Command, ArrowUp, ArrowDown, CornerDownLeft, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 interface ShortcutCheatSheetProps {

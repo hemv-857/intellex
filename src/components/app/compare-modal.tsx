@@ -34,6 +34,19 @@ import {
 import { cn } from '@/lib/utils'
 import { api, fmtNum, timeAgo, type TaskListItem } from './shared'
 
+// Every value interpolated into the report below is model- or user-derived (task
+// titles and tags come from the LLM planner, seeded by a prompt) and the string
+// is written into a same-origin window via document.write. Escape all five
+// characters, not just `<`, and never trust tags.
+function esc(v: unknown): string {
+  return String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 interface CompareMetrics {
   items: number
   valid: number
