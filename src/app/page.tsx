@@ -34,6 +34,7 @@ import { ShortcutCheatSheet } from '@/components/app/shortcut-cheatsheet'
 import { OnboardingTour, useReplayTour } from '@/components/app/onboarding-tour'
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
 import { api, type TaskListItem } from '@/components/app/shared'
+import { AuthGate } from '@/components/app/auth-gate'
 import { cn } from '@/lib/utils'
 import type { LucideIcon } from 'lucide-react'
 
@@ -47,6 +48,14 @@ const MOBILE_NAV: { id: Section; label: string; icon: LucideIcon }[] = [
 ]
 
 export default function Home() {
+  return (
+    <AuthGate>
+      <Intellex />
+    </AuthGate>
+  )
+}
+
+function Intellex() {
   const [section, setSection] = useState<Section>('dashboard')
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
   const [taskCount, setTaskCount] = useState(0)
