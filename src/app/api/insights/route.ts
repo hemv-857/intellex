@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { notTrashed, visibleCompleted } from '@/lib/visibility'
 import { rateLimit, safeApi } from '@/lib/api-utils'
 
 function safeArr(s?: string | null): any[] {
@@ -24,7 +25,7 @@ export const GET = rateLimit({ max: 60, key: 'insights' })(function GET() {
   return safeApi(async () => {
     // Pull all completed-task data items + their task's field schema + source URL.
     const tasks = await db.task.findMany({
-      where: { status: 'completed' },
+      where: visibleCompleted,
       select: { id: true, fields: true, tags: true, stats: true, createdAt: true },
     })
     const taskIdSet = new Set(tasks.map((t) => t.id))

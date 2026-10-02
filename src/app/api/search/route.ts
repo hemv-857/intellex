@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { notTrashed, visibleCompleted } from '@/lib/visibility'
 import { rateLimit, schemas, validateBody } from '@/lib/api-utils'
 import { semanticSearch, type SemanticRecord, type SortMode, type DateRange } from '@/lib/ai'
 
@@ -26,7 +27,7 @@ export const POST = rateLimit({ max: 60, key: 'search' })(async (req: NextReques
 
   // Fetch all completed-task records
   const tasks = await db.task.findMany({
-    where: { status: 'completed' },
+    where: visibleCompleted,
     orderBy: { createdAt: 'desc' },
     include: { dataItems: { orderBy: { createdAt: 'asc' } } },
   })

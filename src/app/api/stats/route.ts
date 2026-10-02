@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { notTrashed, visibleTaskIds } from '@/lib/visibility'
 
 function safeObj(s?: string | null): any {
   if (!s) return {}
@@ -21,9 +22,15 @@ export async function GET() {
     db.task.count({ where: { pinned: true, trashedAt: null } }),
   ])
 
-  const totalItems = await db.dataItem.count()
-  const totalSources = await db.dataSource.count()
-  const validItems = await db.dataItem.count({ where: { valid: true } })
+  // Every record/source aggregate is scoped to visible tasks. These were bare
+  // counts(), so a task moved to trash still inflated the dashboard totals.
+  const visibleIds = await visibleTaskIds()
+  const inVisible = { taskId: { in: visibleIds } }
+  const [totalItems, totalSources, validItems] = await Promise.all([
+    db.dataItem.count({ where: inVisible }),
+    db.dataSource.count({ where: inVisible }),
+    db.dataItem.count({ where: { ...inVisible, valid: true } }),
+  ])
 
   // recent tasks (exclude trashed)
   const recent = await db.task.findMany({
@@ -36,7 +43,7 @@ export async function GET() {
   // status over time (last 14 days, grouped by day)
   const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
   const recentByDay = await db.task.findMany({
-    where: { createdAt: { gte: since } },
+    where: { ...notTrashed, createdAt: { gte: since } },
     select: { status: true, createdAt: true },
   })
   const dayMap = new Map<string, { date: string; planned: number; completed: number; failed: number; running: number }>()
@@ -52,7 +59,7 @@ export async function GET() {
   }
 
   // top source domains
-  const allSources = await db.dataSource.findMany({ select: { hostName: true } })
+  const allSources = await db.dataSource.findMany({ where: inVisible, select: { hostName: true } })
   const domainCounts = new Map<string, number>()
   for (const s of allSources) {
     if (!s.hostName) continue
@@ -60,21 +67,13 @@ export async function GET() {
   }
   const topDomains = [...domainCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([host, count]) => ({ host, count }))
 
-  // tokens
-  const tasks = await db.task.findMany({ select: { stats: true } })
+  // tokens + tag distribution from one query over visible tasks
+  const tasks = await db.task.findMany({ where: notTrashed, select: { stats: true, tags: true } })
   let tokens = 0
+  const tagMap = new Map<string, number>()
   for (const t of tasks) {
     const st = safeObj(t.stats)
     if (typeof st.tokens === 'number') tokens += st.tokens
-  }
-
-  // tag distribution
-  const tagMap = new Map<string, number>()
-  for (const t of tasks) {
-    // need tags - fetch separately below
-  }
-  const allTags = await db.task.findMany({ select: { tags: true } })
-  for (const t of allTags) {
     for (const tag of safeArr(t.tags)) {
       const tg = String(tag)
       tagMap.set(tg, (tagMap.get(tg) || 0) + 1)

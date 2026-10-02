@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { notTrashed, visibleCompleted } from '@/lib/visibility'
 
 function safeObj(s?: string | null): any {
   if (!s) return {}
@@ -12,7 +13,7 @@ export async function GET(req: NextRequest) {
   const q = searchParams.get('q')?.toLowerCase() || undefined
   const tag = searchParams.get('tag') || undefined
 
-  const taskWhere: any = { status: 'completed' }
+  const taskWhere: any = { ...visibleCompleted }
   if (tag) {
     // SQLite has no native array filter; fetch tasks and filter in memory by tag
   }

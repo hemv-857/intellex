@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { notTrashed } from '@/lib/visibility'
 
 function safeArr(s?: string | null): any[] {
   if (!s) return []
@@ -30,6 +31,9 @@ export async function GET(req: NextRequest) {
     }),
   ])
   if (!a || !b) return NextResponse.json({ error: 'One or both tasks not found' }, { status: 404 })
+  if (a.trashedAt || b.trashedAt) {
+    return NextResponse.json({ error: 'Trashed tasks cannot be compared' }, { status: 400 })
+  }
 
   const summarize = (t: any) => {
     const stats = safeObj(t.stats)
