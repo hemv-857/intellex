@@ -1,0 +1,9 @@
+# This Vercel project is a redirect to the Render service, not a Next.js app.
+#
+# Without this, Vercel sees package.json, decides the repo is a Next.js project,
+# builds it, and injects a `services`/`rewrites` block that shadows the redirect —
+# which serves the app from a serverless filesystem that cannot hold SQLite.
+#
+# Uploading nothing but vercel.json keeps it a pure redirect project.
+*
+!vercel.json

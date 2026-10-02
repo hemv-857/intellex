@@ -3,8 +3,8 @@
   "framework": null,
   "redirects": [
     {
-      "source": "/:path*",
-      "destination": "https://intellex.onrender.com/:path*",
+      "source": "/(.*)",
+      "destination": "https://intellex.onrender.com/$1",
       "permanent": false
     }
   ]
