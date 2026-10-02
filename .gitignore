@@ -32,6 +32,19 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+.env.example
+
+# local sqlite database
+db/*.db
+
+# runtime pid written by .zscripts/dev.sh
+.zscripts/dev.pid
+
+# QA screenshots and agent output from verification passes
+preview-*.png
+qa*.png
+upload/
+tool-results/
 
 # vercel
 .vercel
