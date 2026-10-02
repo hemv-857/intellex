@@ -26,7 +26,6 @@ services:
     buildCommand: bun install --frozen-lockfile && bunx prisma migrate deploy && bun run build
     startCommand: bun run start:render
     healthCheckPath: /api/health
-    autoDeploy: true
 
     envVars:
       - key: NODE_VERSION
