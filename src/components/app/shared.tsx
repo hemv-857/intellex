@@ -84,6 +84,8 @@ export interface TaskDetail {
   progress: { step?: string; message?: string; current?: number; total?: number }
   stats: { items?: number; sources?: number; valid?: number; duplicates?: number; tokens?: number }
   error: string | null
+  trashedAt: string | null
+  pinned: boolean
   createdAt: string
   updatedAt: string
 }

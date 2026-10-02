@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { buildMatchExpression } from './search-query'
 import { visibleCompleted } from './visibility'
 import { expandQuery } from './ai'
+import { ensureFtsIndex } from './fts'
 
 // Search used to load every record of every completed task into Node and score it
 // in JS: measured ~1.65s and ~192MB per request at 100k rows. Matching now
@@ -45,6 +46,10 @@ export async function ftsSearch(args: {
   const terms = [args.query, ...(args.expandedTerms ?? [])]
   const match = buildMatchExpression(terms)
   if (!match) return []
+
+  // The index is a virtual table Prisma cannot manage, so make sure it is there
+  // rather than failing the whole query if it went missing.
+  await ensureFtsIndex()
 
   const days = RANGE_DAYS[dateRange]
   const cutoff = days ? new Date(Date.now() - days * 86_400_000) : null

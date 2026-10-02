@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { DATASETS_PAGE_SIZE } from '@/lib/limits'
 import { visibleCompleted } from '@/lib/visibility'
+import { ensureFtsIndex } from '@/lib/fts'
 
 function safeObj(s?: string | null): any {
   if (!s) return {}
@@ -24,6 +25,8 @@ export async function GET(req: NextRequest) {
   const tag = searchParams.get('tag') || undefined
   const offset = Math.max(0, Number(searchParams.get('offset')) || 0)
   const limit = Math.min(Math.max(Number(searchParams.get('limit')) || DATASETS_PAGE_SIZE, 1), 500)
+
+  await ensureFtsIndex()
 
   // A plain-text search reuses the FTS index rather than scanning in JS.
   const usesFts = q.length > 0

@@ -115,6 +115,10 @@ export const schemas = {
     prompt: z.string().min(10).max(2000),
     icon: z.string().max(10).optional(),
   }),
+  shareCreate: z.object({
+    label: z.string().max(120).optional(),
+    ttlDays: z.number().int().min(0).max(365).optional(), // 0 = never expires
+  }),
   preferences: z.object({
     defaultSort: z.enum(['relevance', 'latest']).optional(),
     defaultDateRange: z.enum(['any', '7d', '30d', '90d', '365d']).optional(),

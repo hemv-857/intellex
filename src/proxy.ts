@@ -7,8 +7,10 @@ import { NextResponse, type NextRequest } from 'next/server'
 // /api/auth/*   — the login handshake itself, must be reachable unauthenticated.
 // /api/scheduler/* — keeps its own SCHEDULER_KEY boundary so a cron driver only
 //                    needs one credential, and is not gated here.
-
-const EXEMPT_PREFIXES = ['/api/auth/', '/api/scheduler/']
+// /api/public/* — share links authenticate with their own single-purpose token.
+//                  The handlers under it must stay scoped to that token: never
+//                  widen one to answer questions about anything else.
+const EXEMPT_PREFIXES = ['/api/auth/', '/api/scheduler/', '/api/public/']
 
 // Constant-time compare without node:crypto, which is unavailable on the edge
 // runtime this file runs on.

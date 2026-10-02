@@ -43,6 +43,7 @@ model Task {
   dataItems   DataItem[]
   sources     DataSource[]
   activity    ActivityLog[]
+  shares      ShareLink[]
   template    Template?  @relation(fields: [templateId], references: [id])
   templateId  String?
 
@@ -130,6 +131,24 @@ model Template {
 }
 
 // Audit trail — track every meaningful action
+// A share link grants read-only access to ONE task's dataset, nothing else. The
+// token is stored hashed: a database leak must not hand out working share URLs.
+model ShareLink {
+  id        String    @id @default(cuid())
+  taskId    String
+  label     String?
+  tokenHash String    @unique
+  expiresAt DateTime?
+  revokedAt DateTime?
+  viewCount Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([expiresAt])
+}
+
 model ActivityLog {
   id          String   @id @default(cuid())
   taskId      String?

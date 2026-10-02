@@ -19,6 +19,7 @@ import {
   FileJson,
   FileSpreadsheet,
   FileText,
+  Link2,
   Search,
   Quote,
   Sparkles,
@@ -55,6 +56,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { ShareDialog } from './share-dialog'
 import {
   api,
   type TaskDetail,
@@ -83,6 +85,7 @@ export function TaskDetailView({ taskId, onBack, onDelete }: TaskDetailProps) {
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
   const [confidenceFilter, setConfidenceFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all')
+  const [shareOpen, setShareOpen] = useState(false)
 
   // Listen for confidence-filter events (from the mini sparkline on task cards)
   useEffect(() => {
@@ -226,6 +229,12 @@ export function TaskDetailView({ taskId, onBack, onDelete }: TaskDetailProps) {
 
   return (
     <div className="space-y-5 animate-fade-in-up">
+      <ShareDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        taskId={task.id}
+        taskTitle={task.title}
+      />
       {/* Top bar */}
       <div className="flex items-center justify-between gap-3">
         <Button variant="ghost" size="sm" onClick={onBack} className="text-muted-foreground">
@@ -263,6 +272,11 @@ export function TaskDetailView({ taskId, onBack, onDelete }: TaskDetailProps) {
               <DropdownMenuItem onClick={handleDuplicate}>
                 <Copy className="h-3.5 w-3.5 mr-2" /> Duplicate task
               </DropdownMenuItem>
+              {task.status === 'completed' && !task.trashedAt && (
+                <DropdownMenuItem onClick={() => setShareOpen(true)}>
+                  <Link2 className="h-3.5 w-3.5 mr-2" /> Share dataset…
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={handleToggleSchedule}>
                 <CalendarClock className="h-3.5 w-3.5 mr-2" /> {(task as any).schedule?.enabled ? 'Disable schedule' : 'Schedule re-run…'}
               </DropdownMenuItem>
