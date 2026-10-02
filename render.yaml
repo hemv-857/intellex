@@ -1,0 +1,70 @@
+# Render blueprint for Intellex.
+#
+# Deploy with:  render blueprint launch      (or connect the repo in the dashboard)
+#
+# Shape: one long-lived Node web service with a persistent disk. That is
+# deliberate — collection runs are fire-and-forget after the response returns, so
+# they need a process that stays alive. A serverless platform would freeze them
+# mid-write, and SQLite needs a real filesystem.
+#
+# Before the first deploy, set the secrets marked `sync: false`:
+#   APP_TOKEN       single-tenant access token
+#   SCHEDULER_KEY   enables scheduled collections
+#   ZAI_API_KEY     LLM credential
+#   ZAI_BASE_URL    LLM endpoint
+# Generate with:
+#   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+services:
+  - type: web
+    name: intellex
+    runtime: node
+    plan: starter # 'free' sleeps after inactivity, which interrupts collection runs
+    region: oregon
+    branch: main
+    autoDeployTrigger: commit
+    buildCommand: bun install --frozen-lockfile && bunx prisma migrate deploy && bun run build
+    startCommand: bun run start:render
+    healthCheckPath: /api/health
+    autoDeploy: true
+
+    envVars:
+      - key: NODE_VERSION
+        value: "22.12.0"
+      - key: BUN_VERSION
+        value: "1.4.2"
+      - key: NODE_ENV
+        value: production
+
+      # The persistent disk. This path is what makes the data survive deploys —
+      # never point it at the ephemeral filesystem.
+      - key: DATABASE_URL
+        value: file:/var/data/intellex/custom.db
+
+      # Public origin, used to build shareable /share/<token> links.
+      - key: NEXT_PUBLIC_APP_URL
+        generateValue: true
+
+      # Single-tenant auth and the scheduler. Both fail closed when unset.
+      - key: APP_TOKEN
+        sync: false
+      - key: SCHEDULER_KEY
+        sync: false
+
+      # The Z.AI SDK only reads a credentials FILE. instrumentation.ts writes
+      # .z-ai-config from these at boot; without them, collection runs fail.
+      - key: ZAI_API_KEY
+        sync: false
+      - key: ZAI_BASE_URL
+        sync: false
+
+      # Scheduling runs inside this long-lived process.
+      - key: IN_PROCESS_SCHEDULER
+        value: "1"
+
+    # The SQLite database and its write-ahead log live here, so they persist
+    # across deploys.
+    disk:
+      name: intellex-data
+      mountPath: /var/data/intellex
+      sizeGB: 1

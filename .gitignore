@@ -34,8 +34,11 @@ yarn-error.log*
 .env*
 !.env.example
 
-# local sqlite database
+# local sqlite database, including the write-ahead log siblings SQLite creates
 db/*.db
+db/*.db-wal
+db/*.db-shm
+db/*.db-journal
 
 # runtime pid written by .zscripts/dev.sh
 .zscripts/dev.pid

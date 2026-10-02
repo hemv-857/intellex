@@ -42,6 +42,52 @@ Other scripts: `bun run build`, `bun run start`, `bun run lint`, `bun test`, `bu
 
 `.zscripts/` holds container-oriented helpers (`dev.sh`, `build.sh`, `start.sh`, mini-service and Python runtime builds). You do not need them for local development.
 
+## Deploying
+
+### Render (primary — where this app belongs)
+
+One long-lived Node service with a persistent disk. `render.yaml` is a blueprint, so this is the whole deploy:
+
+```bash
+render blueprint launch          # or connect the repo in the dashboard
+```
+
+Then set the four secrets it marks `sync: false`:
+
+| Secret | Generate with |
+| --- | --- |
+| `APP_TOKEN` | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `SCHEDULER_KEY` | same |
+| `ZAI_API_KEY` / `ZAI_BASE_URL` | from your Z.AI account |
+
+The blueprint points `DATABASE_URL` at `file:/var/data/intellex/custom.db` on a 1 GB disk, so **the database survives deploys**. `scripts/start-render.sh` creates that directory (SQLite will not), applies migrations, and starts the standalone server on `PORT`.
+
+`/api/health` is the liveness probe and checks the things that actually break a deploy — database reachable, migrations applied, search index consistent, auth configured:
+
+```json
+{ "status": "ok",
+  "checks": { "database": "ok", "schema": "ok", "searchIndex": "ok", "auth": "ok" },
+  "scheduler": "enabled", "inProcessScheduler": true, "llmConfigured": true }
+```
+
+Two things the platform cannot do for you:
+
+- **The LLM credential is a file.** The Z.AI SDK only reads `.z-ai-config` from the working directory, home directory, or `/etc` — it has no environment-variable support. `src/lib/zai-config.ts` writes it at boot from `ZAI_API_KEY`/`ZAI_BASE_URL` with mode `0600`, into both the working directory and `$HOME` (the standalone working directory is `.next/standalone`, which every build wipes). Without those env vars, collection runs fail with a config error.
+- **Use the `starter` plan, not `free`.** Free instances sleep after inactivity, which interrupts a collection run mid-write. `SIGTERM` triggers a 10-second drain so a deploy does not cut a write off.
+
+### Vercel
+
+`vercel.json` redirects the whole domain to the Render service. That is deliberate: this app cannot run *on* serverless, because
+
+- SQLite needs a persistent filesystem, and
+- collection runs are fire-and-forget after the response returns, so a frozen function would abandon a run partway through writing.
+
+Point a Vercel domain at it if you want Vercel-managed TLS and CDN in front; the app itself stays on Render. If you later need the app to genuinely run on Vercel, that means moving to Postgres and moving collection execution to a queue — a real change, not a config flag.
+
+### Other Node hosts (Railway, Fly.io)
+
+The same shape works: a long-lived process, a persistent volume mounted at the path in `DATABASE_URL`, and `bun run start:render` as the start command.
+
 ## Scheduling
 
 `src/lib/scheduler.ts` holds the cycle; `src/instrumentation.ts` triggers it every 60s; `/api/scheduler/tick` exposes it for external drivers. One implementation, three entry points.

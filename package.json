@@ -11,7 +11,8 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:generate": "prisma generate",
-    "db:reset": "prisma migrate reset"
+    "db:reset": "prisma migrate reset",
+    "start:render": "sh scripts/start-render.sh"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
