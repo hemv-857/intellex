@@ -38,6 +38,8 @@ Generate secrets with `node -e "console.log(require('crypto').randomBytes(32).to
 
 Other scripts: `bun run build`, `bun run start`, `bun run lint`, `bun test`, `bun run db:migrate` (create a migration), `bun run db:reset`.
 
+> **Migration warning.** `DataItemFts` is a SQLite *virtual* table, which Prisma cannot model, so `prisma migrate diff` reports it as drift and will generate `DROP TABLE` statements for it and its shadow tables. Migrations touching it must be hand-authored. `src/lib/fts.ts` also recreates the index at boot if it goes missing, and search calls it before querying.
+
 `.zscripts/` holds container-oriented helpers (`dev.sh`, `build.sh`, `start.sh`, mini-service and Python runtime builds). You do not need them for local development.
 
 ## Layout
@@ -64,7 +66,7 @@ worklog.md            build + QA log, 14 phases, including root-cause notes on t
 | `POST` | `/api/tasks/[id]/export` | `?format=csv\|json\|xlsx` |
 | `GET`/`POST` | `/api/tasks/[id]/schedule` | Read / set recurring collection |
 | `POST` | `/api/tasks/[id]/duplicate` | Clone prompt + planned schema into a new task |
-| `POST` | `/api/tasks/bulk` | `delete`, `purge`, `restore`, `pin`, `unpin` across ids |
+| `POST` | `/api/tasks/bulk` | `delete`, `purge`, `restore`, `pin`, `unpin`, `duplicate` across ids |
 | `GET` | `/api/tasks/compare?a=&b=` | Two-task metrics, shared fields/tags, per-metric winners |
 | `POST` | `/api/scheduler/tick` | Fire due scheduled collections (secret-gated) |
 | `GET`/`POST` | `/api/scheduler/purge-trash` | Hard-delete trash older than 30 days (secret-gated) |
@@ -72,13 +74,24 @@ worklog.md            build + QA log, 14 phases, including root-cause notes on t
 | `GET` | `/api/insights` | Validity rate, confidence buckets, field completeness, source reliability, quality trend |
 | `GET` | `/api/stats` | Dashboard aggregates |
 | `GET` | `/api/datasets` · `/api/sources` · `/api/activity` | Cross-task explorers and audit feed |
-| `GET`/`POST` | `/api/templates`, `/api/templates/[id]`, `/api/templates/seed` | Prompt templates; six built-ins seeded idempotently |
+| `GET` | `/api/public/share/[token]` | **No `APP_TOKEN` needed** — the only unauthenticated read. Authorised solely by the share token, scoped to one task's dataset |
+| `GET`/`POST`/`DELETE` | `/api/tasks/[id]/share` | Create / list / revoke read-only share links |
+| `GET` | `/api/sources/[id]/re-extract` (POST) | Re-read one source and replace only its records |
+| `GET` | `/api/templates`, `/api/templates/[id]`, `/api/templates/seed` | Prompt templates; six built-ins seeded idempotently |
 | `GET`/`POST` | `/api/preferences` | Singleton settings row |
 | `POST` | `/api/templates/[id]` | Record a template use (drives the "used N×" badge) |
 
+## Sharing a dataset
+
+A completed collection can be published as a read-only link (`Share dataset…` in the task's overflow menu). The token is 32 random bytes, shown exactly once and stored only as a SHA-256 hash, so a database leak cannot be turned into working links. Links default to 30 days, can be revoked instantly, and resolve to that one task's dataset and nothing else — verified by test in `tests/share.test.ts`.
+
 ## Features
 
-- **Semantic search** — LLM query expansion (cached 5 min) plus weighted field scoring, recency decay, date-range filter, and relevance/latest sort.
+- **SQL-side search** — records are matched by an FTS5 index (title, summary, record JSON, task title and tags) maintained by triggers, so search no longer loads the corpus into Node. The LLM is consulted only to *widen* a query that found nothing, and that widening runs through FTS too. `contentDate` is parsed once at write time so date filtering and latest-sorting happen in SQL.
+- **Insight aggregates in SQL** — validity, confidence buckets, per-field completeness (`json_each`), source reliability and the 14-day quality trend are all `GROUP BY` queries. `tests/quality-sql.test.ts` executes the production SQL fragment against a real SQLite engine and fails if it drifts from the TypeScript implementation.
+- **Re-extract a source** — re-read one page and replace only its records; far cheaper than re-running a collection, and a failed read leaves existing data untouched.
+- **Bulk duplicate** — clone several tasks from the selection bar; single and bulk share one clone implementation.
+- **Spotlight onboarding** — the tour points at real sidebar elements and falls back to a centred card when a target is hidden (mobile).
 - **Quality scoring** — per task: `validityRate*50 + sourceCoverage*25 + (1-dupRate)*25`, with a colour-coded badge and a high/medium/low confidence bar.
 - **Clickable confidence drilldown** — filter a task's Data tab by confidence bucket.
 - **Scheduling** — per-task interval; the tick endpoint advances `nextRunAt` before firing so a duplicate tick cannot double-run a task.
