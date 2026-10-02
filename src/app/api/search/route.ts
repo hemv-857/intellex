@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { rateLimit, schemas, validateBody } from '@/lib/api-utils'
 import { semanticSearch, type SemanticRecord, type SortMode, type DateRange } from '@/lib/ai'
 
 function safeObj(s?: string | null): any {
@@ -12,16 +13,16 @@ const VALID_RANGES: DateRange[] = ['any', '7d', '30d', '90d', '365d']
 
 // POST /api/search  { q: string, limit?: number, sort?: 'relevance'|'latest', dateRange?: 'any'|'7d'|'30d'|'90d'|'365d' }
 // Semantic search across all completed-task records using LLM query expansion + relevance scoring.
-export async function POST(req: NextRequest) {
+export const POST = rateLimit({ max: 60, key: 'search' })(async (req: NextRequest) => {
   const body = await req.json().catch(() => ({} as any))
-  const q = String(body?.q || '').trim()
-  const limit = Math.min(Math.max(Number(body?.limit) || 100, 1), 500)
-  const sort: SortMode = VALID_SORTS.includes(body?.sort) ? body.sort : 'relevance'
-  const dateRange: DateRange = VALID_RANGES.includes(body?.dateRange) ? body.dateRange : 'any'
-
-  if (!q) {
-    return NextResponse.json({ error: 'Query (q) is required' }, { status: 400 })
+  const parsed = validateBody(schemas.search, body)
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 })
   }
+  const q = parsed.data.q.trim()
+  const limit = parsed.data.limit
+  const sort: SortMode = parsed.data.sort
+  const dateRange: DateRange = parsed.data.dateRange
 
   // Fetch all completed-task records
   const tasks = await db.task.findMany({
@@ -63,4 +64,4 @@ export async function POST(req: NextRequest) {
     scanned: records.length,
     hits,
   })
-}
+})

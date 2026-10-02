@@ -43,11 +43,17 @@ export function rateLimit(opts: RateLimitOptions) {
   }
 }
 
+// Only trust forwarding headers when a proxy is actually in front of us. Without
+// this, any client can send its own x-forwarded-for and mint a fresh rate-limit
+// bucket per request. Set TRUST_PROXY=1 when deploying behind Caddy/nginx.
 function getClientIp(req: NextRequest): string {
-  const xff = req.headers.get('x-forwarded-for')
-  if (xff) return xff.split(',')[0].trim()
-  const xri = req.headers.get('x-real-ip')
-  if (xri) return xri
+  const trustProxy = process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true'
+  if (trustProxy) {
+    const xff = req.headers.get('x-forwarded-for')
+    if (xff) return xff.split(',')[0].trim()
+    const xri = req.headers.get('x-real-ip')
+    if (xri) return xri
+  }
   return 'anonymous'
 }
 
@@ -78,6 +84,22 @@ export const schemas = {
     prompt: z.string().min(10, 'Prompt must be at least 10 characters').max(2000, 'Prompt too long (max 2000 chars)'),
   }),
   runTask: z.object({}).optional(),
+  // Exactly one action per PATCH. Previously body.purge / body.restore / body.pinned
+  // were trusted by truthiness on an untyped object, so any truthy value — including
+  // "false" as a string or an array — could trigger a permanent delete.
+  taskPatch: z
+    .object({
+      pinned: z.boolean().optional(),
+      restore: z.boolean().optional(),
+      purge: z.boolean().optional(),
+    })
+    .refine((v) => Object.values(v).some((x) => x === true), {
+      message: 'Provide one of pinned, restore or purge set to true',
+    }),
+  bulkTasks: z.object({
+    ids: z.array(z.string().min(1)).min(1).max(500),
+    action: z.enum(['delete', 'purge', 'restore', 'pin', 'unpin']),
+  }),
   search: z.object({
     q: z.string().min(1).max(500),
     limit: z.number().int().min(1).max(500).optional().default(100),

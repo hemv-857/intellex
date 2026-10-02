@@ -698,6 +698,17 @@ Rules:
 
 const expansionCache = new Map<string, { terms: string[]; ts: number }>()
 const EXPANSION_TTL = 5 * 60 * 1000 // 5 minutes
+// The TTL only gated reads, so every distinct query left an entry behind forever.
+// Bounded LRU: the oldest insertion is evicted once the cap is hit.
+const EXPANSION_MAX = 500
+
+function cacheExpansion(key: string, terms: string[]) {
+  if (expansionCache.size >= EXPANSION_MAX) {
+    const oldest = expansionCache.keys().next().value
+    if (oldest !== undefined) expansionCache.delete(oldest)
+  }
+  expansionCache.set(key, { terms, ts: Date.now() })
+}
 
 export async function expandQuery(query: string): Promise<string[]> {
   const key = query.toLowerCase().trim()
@@ -725,7 +736,7 @@ export async function expandQuery(query: string): Promise<string[]> {
     // Always ensure the original query's words are included
     const originalWords = key.split(/\s+/).filter((w) => w.length > 2)
     const allTerms = [...new Set([...originalWords, ...terms])]
-    expansionCache.set(key, { terms: allTerms, ts: Date.now() })
+    cacheExpansion(key, allTerms)
     return allTerms
   } catch {
     // Fallback: just split the query into words

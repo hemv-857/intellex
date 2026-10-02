@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { planWorkflow, buildInitialWorkflow } from '@/lib/ai'
-import { logActivity } from '@/lib/api-utils'
+import { logActivity, rateLimit, schemas, validateBody } from '@/lib/api-utils'
 
 // GET /api/tasks?status=&q=&trashed=false  -> list tasks (excludes trashed by default)
 export async function GET(req: NextRequest) {
@@ -91,13 +91,15 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ tasks: result })
 }
 
-// POST /api/tasks  -> create a task from a natural-language prompt
-export async function POST(req: NextRequest) {
+// POST /api/tasks  -> create a task from a natural-language prompt.
+// Rate limited because each call bills one LLM planner completion.
+export const POST = rateLimit({ max: 30, key: 'task-create' })(async (req: NextRequest) => {
   const body = await req.json().catch(() => ({} as any))
-  const prompt = String(body?.prompt || '').trim()
-  if (!prompt) {
-    return NextResponse.json({ error: 'Prompt is required' }, { status: 400 })
+  const parsed = validateBody(schemas.createTask, body)
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 })
   }
+  const prompt = parsed.data.prompt.trim()
 
   try {
     const plan = await planWorkflow(prompt)
@@ -146,7 +148,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message || 'Failed to plan workflow' }, { status: 500 })
   }
-}
+})
 
 function safeArr(s: string): any[] {
   try { return JSON.parse(s) } catch { return [] }

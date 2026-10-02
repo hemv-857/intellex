@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { logActivity } from '@/lib/api-utils'
+import { logActivity, rateLimit, schemas, validateBody } from '@/lib/api-utils'
 
 // POST /api/tasks/bulk  { ids: string[], action: 'delete' | 'purge' | 'restore' | 'pin' | 'unpin' }
-export async function POST(req: NextRequest) {
+export const POST = rateLimit({ max: 20, key: 'bulk' })(async (req: NextRequest) => {
   const body = await req.json().catch(() => ({} as any))
-  const ids: string[] = Array.isArray(body?.ids) ? body.ids.filter((x: any) => typeof x === 'string') : []
-  const action = String(body?.action || '')
-
-  if (ids.length === 0) return NextResponse.json({ error: 'ids[] required' }, { status: 400 })
-  if (!['delete', 'purge', 'restore', 'pin', 'unpin'].includes(action)) {
-    return NextResponse.json({ error: 'invalid action' }, { status: 400 })
+  const parsed = validateBody(schemas.bulkTasks, body)
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 })
   }
+  const ids: string[] = parsed.data.ids
+  const action = parsed.data.action
 
   const tasks = await db.task.findMany({ where: { id: { in: ids } }, select: { id: true, title: true } })
   const foundIds = tasks.map((t) => t.id)
@@ -45,4 +44,4 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, action, affected, requested: ids.length })
-}
+})

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { logActivity, safeApi } from '@/lib/api-utils'
+import { logActivity, rateLimit, safeApi } from '@/lib/api-utils'
 import { ensureBuiltInTemplates } from '../route'
 
 // POST /api/templates/seed -> idempotently seed built-in templates if none exist
-export function POST(_req: NextRequest) {
+export const POST = rateLimit({ max: 5, key: 'template-seed' })(function POST(_req: NextRequest) {
   return safeApi(async () => {
     const result = await ensureBuiltInTemplates()
     await logActivity({
@@ -13,4 +13,4 @@ export function POST(_req: NextRequest) {
     })
     return NextResponse.json({ ok: true, ...result })
   })
-}
+})

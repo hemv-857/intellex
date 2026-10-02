@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { safeApi } from '@/lib/api-utils'
+import { rateLimit, safeApi } from '@/lib/api-utils'
 
 function safeArr(s?: string | null): any[] {
   if (!s) return []
@@ -20,7 +20,7 @@ function safeObj(s?: string | null): any {
 }
 
 // GET /api/insights -> platform-wide data-quality insights
-export function GET() {
+export const GET = rateLimit({ max: 60, key: 'insights' })(function GET() {
   return safeApi(async () => {
     // Pull all completed-task data items + their task's field schema + source URL.
     const tasks = await db.task.findMany({
@@ -186,7 +186,7 @@ export function GET() {
       qualityTrend,
     })
   })
-}
+})
 
 function emptyInsights() {
   return {

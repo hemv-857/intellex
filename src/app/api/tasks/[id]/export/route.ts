@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
 import { db } from '@/lib/db'
+import { rateLimit } from '@/lib/api-utils'
 import { logActivity, safeApi } from '@/lib/api-utils'
 
 function safeArr(s?: string | null): any[] {
@@ -24,7 +25,7 @@ function slug(s: string) {
 }
 
 // GET /api/tasks/[id]/export?format=csv|json|xlsx
-export function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = rateLimit({ max: 30, key: 'export' })(function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return safeApi(async () => {
     const { id } = await params
     const { searchParams } = new URL(req.url)
@@ -140,4 +141,4 @@ export function GET(req: NextRequest, { params }: { params: Promise<{ id: string
       },
     })
   })
-}
+})

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { logActivity } from '@/lib/api-utils'
+import { logActivity, schemas, validateBody } from '@/lib/api-utils'
 
 function safeArr(s?: string | null): any[] {
   if (!s) return []
@@ -71,7 +71,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 // PATCH /api/tasks/[id]  { pinned?: boolean, restore?: boolean, purge?: boolean }
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const body = await req.json().catch(() => ({} as any))
+  const raw = await req.json().catch(() => ({} as any))
+  const parsed = validateBody(schemas.taskPatch, raw)
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 })
+  }
+  const body = parsed.data
   const task = await db.task.findUnique({ where: { id }, select: { id: true, title: true, pinned: true, trashedAt: true } })
   if (!task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
 
