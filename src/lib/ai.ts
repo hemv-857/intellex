@@ -86,7 +86,7 @@ function normalizeKey(s: string): string {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, ' ').trim()
 }
 
-function dedupeKeyFrom(data: Record<string, unknown>, fields: FieldDef[]): string {
+export function dedupeKeyFrom(data: Record<string, unknown>, fields: FieldDef[]): string {
   const parts: string[] = []
   for (const f of fields) {
     const v = data[f.name]
@@ -287,7 +287,7 @@ interface ExtractedRecord {
   [key: string]: unknown
 }
 
-async function extractFromSource(
+export async function extractFromSource(
   plan: WorkflowPlan,
   source: { url: string; title: string; snippet?: string },
 ): Promise<{ records: ExtractedRecord[]; tokens: number; title: string; pageReadOk: boolean }> {

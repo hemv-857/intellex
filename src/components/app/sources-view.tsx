@@ -23,6 +23,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { api, fmtNum, fmtDate, timeAgo, hostFromUrl, truncate } from './shared'
+import { RefreshCcwDot } from 'lucide-react'
 
 interface SourceRow {
   id: string
@@ -47,6 +48,7 @@ interface SourcesViewProps {
 export function SourcesView({ onOpenTask }: SourcesViewProps) {
   const [sources, setSources] = useState<SourceRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [reExtractId, setReExtractId] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [status, setStatus] = useState<'all' | 'fetched' | 'failed' | 'pending'>('all')
 
@@ -66,6 +68,28 @@ export function SourcesView({ onOpenTask }: SourcesViewProps) {
     const t = setTimeout(load, 250)
     return () => clearTimeout(t)
   }, [load])
+
+  const reExtracting = reExtractId
+
+  const handleReExtract = async (s: SourceRow) => {
+    setReExtractId(s.id)
+    try {
+      const res = await api<{ message: string; records: number; previousRecords: number }>(
+        `/api/sources/${s.id}/re-extract`,
+        { method: 'POST' },
+      )
+      if (res.records > 0 || !res.message.includes('left untouched')) {
+        toast.success(res.message)
+      } else {
+        toast.info(res.message)
+      }
+      await load()
+    } catch (e) {
+      toast.error((e as Error).message || 'Re-extraction failed')
+    } finally {
+      setReExtractId(null)
+    }
+  }
 
   // group by host
   const byHost = new Map<string, SourceRow[]>()
@@ -194,6 +218,17 @@ export function SourcesView({ onOpenTask }: SourcesViewProps) {
                             </button>
                             {s.publishedTime && <span className="flex items-center gap-0.5"><Clock className="h-2.5 w-2.5" />{fmtDate(s.publishedTime)}</span>}
                             {s.fetchedAt && <span>read {timeAgo(s.fetchedAt)}</span>}
+                            <button
+                              onClick={() => handleReExtract(s)}
+                              disabled={reExtracting === s.id}
+                              title="Re-read this page and re-extract its records"
+                              className="flex items-center gap-0.5 hover:text-emerald-600 dark:hover:text-emerald-400 disabled:opacity-50"
+                            >
+                              {reExtracting === s.id
+                                ? <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                                : <RefreshCcwDot className="h-2.5 w-2.5" />}
+                              re-extract
+                            </button>
                             <a href={s.url} target="_blank" rel="noopener noreferrer" className="ml-auto flex items-center gap-0.5 hover:text-foreground">
                               open <ExternalLink className="h-2.5 w-2.5" />
                             </a>

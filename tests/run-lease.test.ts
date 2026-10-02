@@ -28,3 +28,16 @@ describe('run lease freshness', () => {
     expect(isLiveLease(null, now)).toBe(false)
   })
 })
+describe('reaper predicate', () => {
+  test('treats a running task with no lease as dead', () => {
+    // These are rows written before leases existed. NULL never satisfies `lt`, so
+    // an expiry-only reaper strands them forever.
+    const cutoff = Date.parse('2026-10-02T12:00:00Z')
+    const dead = (startedAt: number | null) =>
+      startedAt === null || Date.now() - startedAt > STALE_RUN_MS
+    expect(dead(null)).toBe(true)
+    expect(dead(Date.now())).toBe(false)
+    expect(dead(Date.now() - STALE_RUN_MS - 1)).toBe(true)
+    expect(cutoff).toBeGreaterThan(0)
+  })
+})

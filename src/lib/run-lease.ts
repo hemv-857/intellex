@@ -49,14 +49,21 @@ export async function releaseRun(taskId: string, token: string) {
 // operator can re-run. Safe to call repeatedly; returns the ids it reclaimed.
 export async function reapStaleRuns(now = new Date()): Promise<string[]> {
   const cutoff = new Date(now.getTime() - STALE_RUN_MS)
+  // Dead means either the lease expired, or there is no lease at all — a row
+  // left as 'running' by a process that predates leases can never be reclaimed
+  // by the expiry check alone, because NULL never satisfies `lt`.
+  const dead = {
+    status: 'running',
+    OR: [{ startedAt: null }, { startedAt: { lt: cutoff } }],
+  }
   const stale = await db.task.findMany({
-    where: { status: 'running', startedAt: { lt: cutoff } },
+    where: dead,
     select: { id: true },
   })
   if (stale.length === 0) return []
 
   await db.task.updateMany({
-    where: { id: { in: stale.map((t) => t.id) }, status: 'running', startedAt: { lt: cutoff } },
+    where: { id: { in: stale.map((t) => t.id) }, ...dead },
     data: {
       status: 'failed',
       startedAt: null,
