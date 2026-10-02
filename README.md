@@ -42,6 +42,10 @@ Other scripts: `bun run build`, `bun run start`, `bun run lint`, `bun test`, `bu
 
 `.zscripts/` holds container-oriented helpers (`dev.sh`, `build.sh`, `start.sh`, mini-service and Python runtime builds). You do not need them for local development.
 
+## Scheduling
+
+`src/lib/scheduler.ts` holds the cycle; `src/instrumentation.ts` triggers it every 60s; `/api/scheduler/tick` exposes it for external drivers. One implementation, three entry points.
+
 ## Layout
 
 ```
@@ -113,7 +117,9 @@ A completed collection can be published as a read-only link (`Share dataset…` 
 
 The scheduler endpoints carry their own `SCHEDULER_KEY` and are deliberately exempt from the `APP_TOKEN` gate, so a cron driver only needs that one credential. They **fail closed**: no configured key means no scheduling, and the comparison is timing-safe.
 
-The browser deliberately does **not** hold `SCHEDULER_KEY` — anything in `NEXT_PUBLIC_*` is inlined into the public JS bundle, so a client-side scheduler key is not a secret. Drive the scheduler from cron or launchd instead; `scripts/scheduler-tick.sh` is ready to use and documents the crontab line.
+The browser deliberately does **not** hold `SCHEDULER_KEY` — anything in `NEXT_PUBLIC_*` is inlined into the public JS bundle, so a client-side scheduler key is not a secret.
+
+Instead, **the app drives its own scheduler**: `src/instrumentation.ts` starts a 60-second server-side interval that runs the same `lib/scheduler.ts` cycle as the HTTP endpoint (reclaim dead runs → fire due collections → sweep old trash every 6 hours). It starts only when `SCHEDULER_KEY` is set, so an unconfigured install stays disabled. For a multi-instance deployment set `IN_PROCESS_SCHEDULER=0` and drive `scripts/scheduler-tick.sh` from cron or launchd instead, so only one instance ticks.
 
 ## Durability
 
@@ -128,7 +134,8 @@ A durable job queue is still the right answer for production-scale reliability; 
 
 ## Known limitations
 
-- Scheduling requires an external cron/launchd driver (`scripts/scheduler-tick.sh`). There is no in-process scheduler.
+- Scheduling runs in-process by default. On more than one instance, disable it (`IN_PROCESS_SCHEDULER=0`) and use an external driver, or every instance will tick.
+- Token usage is only counted from collections run after the metering fix; older rows report `not tracked yet` rather than a fabricated number.
 - Rate limiting is per-process and in-memory, so it does not span instances.
 - The quality score reads the denormalised `stats` blob written at run time; if it is missing the live row counts are used instead.
 - Rate limiting is per-IP and in-memory, so it resets on restart and does not span instances.

@@ -90,12 +90,18 @@ export function Dashboard({ onOpenTask, onNavigate }: DashboardProps) {
       sub: 'across all tasks',
     },
     {
-      label: 'Tokens Used',
-      value: counts?.tokens ?? 0,
+      // Only counts from collections whose token usage is real per-call API
+      // usage. Older collections recorded an inflated upstream figure, so they
+      // are excluded rather than averaged into something meaningless.
+      label: 'AI Tokens',
+      value: (counts?.tokensTrackedTasks ?? 0) > 0 ? (counts?.tokens ?? 0) : 0,
       icon: Zap,
       tint: 'from-violet-500/15 to-violet-500/5 text-violet-600 dark:text-violet-400',
       ring: 'ring-violet-500/20',
-      sub: 'cumulative',
+      sub:
+        (counts?.tokensTrackedTasks ?? 0) > 0
+          ? `from ${counts?.tokensTrackedTasks} collection${counts?.tokensTrackedTasks === 1 ? '' : 's'}`
+          : 'not tracked yet',
     },
     {
       label: 'Completed',

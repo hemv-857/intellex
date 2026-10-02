@@ -16,7 +16,7 @@ export interface TaskListItem {
   status: TaskStatus
   objective: string | null
   tags: string[]
-  stats: { items?: number; sources?: number; valid?: number; duplicates?: number; tokens?: number }
+  stats: { items?: number; sources?: number; valid?: number; duplicates?: number; tokens?: number; tokensTracked?: boolean }
   progress: { step?: string; message?: string; current?: number; total?: number } | null
   itemCount: number
   sourceCount: number
@@ -82,7 +82,7 @@ export interface TaskDetail {
   tags: string[]
   workflow: WorkflowStep[]
   progress: { step?: string; message?: string; current?: number; total?: number }
-  stats: { items?: number; sources?: number; valid?: number; duplicates?: number; tokens?: number }
+  stats: { items?: number; sources?: number; valid?: number; duplicates?: number; tokens?: number; tokensTracked?: boolean }
   error: string | null
   trashedAt: string | null
   pinned: boolean
@@ -102,6 +102,8 @@ export interface DashboardStats {
     totalSources: number
     validItems: number
     tokens: number
+    /** Collections whose token count is real per-call API usage. */
+    tokensTrackedTasks?: number
   }
   recent: (TaskListItem & { stats: any })[]
   timeseries: { date: string; planned: number; completed: number; failed: number; running: number }[]

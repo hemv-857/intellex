@@ -69,11 +69,19 @@ export async function GET() {
 
   // tokens + tag distribution from one query over visible tasks
   const tasks = await db.task.findMany({ where: notTrashed, select: { stats: true, tags: true } })
+  // Only sum token counts that are real per-call API usage. Older collections
+  // recorded the sum of page_reader's reported figure, which is far too large to
+  // be token usage and was never comparable — including it is how the dashboard
+  // came to claim 10.3M tokens for eight tasks.
   let tokens = 0
+  let tokensTrackedTasks = 0
   const tagMap = new Map<string, number>()
   for (const t of tasks) {
     const st = safeObj(t.stats)
-    if (typeof st.tokens === 'number') tokens += st.tokens
+    if (st.tokensTracked === true && typeof st.tokens === 'number') {
+      tokens += st.tokens
+      tokensTrackedTasks++
+    }
     for (const tag of safeArr(t.tags)) {
       const tg = String(tag)
       tagMap.set(tg, (tagMap.get(tg) || 0) + 1)
@@ -82,7 +90,7 @@ export async function GET() {
   const tagDist = [...tagMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([tag, count]) => ({ tag, count }))
 
   return NextResponse.json({
-    counts: { totalTasks, runningTasks, completedTasks, failedTasks, plannedTasks, pinnedTasks, totalItems, totalSources, validItems, tokens },
+    counts: { totalTasks, runningTasks, completedTasks, failedTasks, plannedTasks, pinnedTasks, totalItems, totalSources, validItems, tokens, tokensTrackedTasks },
     recent: recent.map((t) => ({
       id: t.id,
       title: t.title,

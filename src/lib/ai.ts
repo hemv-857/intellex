@@ -43,6 +43,12 @@ export interface TaskStats {
   valid: number
   duplicates: number
   tokens: number
+  /**
+   * True when `tokens` is real per-call API usage. False/absent on collections
+   * from before the fix, whose `tokens` summed page_reader's reported figure —
+   * implausibly large and therefore not comparable.
+   */
+  tokensTracked?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -290,10 +296,18 @@ interface ExtractedRecord {
 export async function extractFromSource(
   plan: WorkflowPlan,
   source: { url: string; title: string; snippet?: string },
-): Promise<{ records: ExtractedRecord[]; tokens: number; title: string; pageReadOk: boolean }> {
+): Promise<{ records: ExtractedRecord[]; tokens: number; pageTokens: number; title: string; pageReadOk: boolean }> {
   const zai = await getZAI()
   let pageData: { title?: string; url?: string; html?: string; publishedTime?: string } | null = null
-  let tokens = 0
+  // Two different numbers, deliberately not conflated:
+  //   pageTokens     — what page_reader reports. In practice this is implausibly
+  //                   large for a single page (observed 1.4M–2M, with one value
+  //                   pinned at exactly 2,000,000), so it is recorded per source
+  //                   for reference but is NOT treated as the headline figure.
+  //   aiTokens       — what the API reports for our own completions. This is the
+  //                   number we can stand behind.
+  let pageTokens = 0
+  let aiTokens = 0
   let pageReadOk = true
 
   try {
@@ -305,7 +319,7 @@ export async function extractFromSource(
         html: result.data.html,
         publishedTime: result.data.publishedTime,
       }
-      tokens = result.data.usage?.tokens ?? result.meta?.usage?.tokens ?? 0
+      pageTokens = result.data.usage?.tokens ?? result.meta?.usage?.tokens ?? 0
     }
   } catch (e) {
     // page_reader failed. We still try snippet-only extraction, but the source
@@ -322,7 +336,7 @@ export async function extractFromSource(
   const content = (snippet ? `Snippet: ${snippet}\n\n` : '') + (pageText || '')
 
   if (!content || content.trim().length < 40) {
-    return { records: [], tokens, title, pageReadOk }
+    return { records: [], tokens: aiTokens, pageTokens, title, pageReadOk }
   }
 
   const completion = await zai.chat.completions.create({
@@ -335,11 +349,11 @@ export async function extractFromSource(
     thinking: { type: 'disabled' },
   })
 
-  tokens += completion.usage?.total_tokens ?? completion.usage?.completion_tokens ?? 0
+  aiTokens += completion.usage?.total_tokens ?? completion.usage?.completion_tokens ?? 0
   const raw = completion.choices[0]?.message?.content ?? ''
   const parsed = safeJsonParse<{ records?: ExtractedRecord[] }>(raw, { records: [] })
   const records = Array.isArray(parsed.records) ? parsed.records : []
-  return { records, tokens, title, pageReadOk }
+  return { records, tokens: aiTokens, pageTokens, title, pageReadOk }
 }
 
 export async function executeWorkflow(taskId: string): Promise<void> {
@@ -357,7 +371,9 @@ export async function executeWorkflow(taskId: string): Promise<void> {
   }
 
   const workflow = task.workflow ? safeJsonParse<WorkflowStep[]>(task.workflow, buildInitialWorkflow()) : buildInitialWorkflow()
-  const stats: TaskStats = { items: 0, sources: 0, valid: 0, duplicates: 0, tokens: 0 }
+  // tokensTracked marks that `tokens` is real per-call API usage rather than
+  // the inflated upstream page-reader figure older collections recorded.
+  const stats: TaskStats = { items: 0, sources: 0, valid: 0, duplicates: 0, tokens: 0, tokensTracked: true }
   const setStep = (id: string, status: WorkflowStep['status'], detail?: string) => {
     const s = workflow.find((w) => w.id === id)
     if (s) {
@@ -459,7 +475,7 @@ export async function executeWorkflow(taskId: string): Promise<void> {
         total: sourceRows.length,
       })
       try {
-        const { records, tokens, title, pageReadOk } = await extractFromSource(plan, { url: src.url, title: src.title || '', snippet: src.snippet || '' })
+        const { records, tokens, pageTokens, title, pageReadOk } = await extractFromSource(plan, { url: src.url, title: src.title || '', snippet: src.snippet || '' })
         stats.tokens += tokens
         await db.dataSource.update({
           where: { id: src.id },
@@ -468,7 +484,7 @@ export async function executeWorkflow(taskId: string): Promise<void> {
             // read, and sourceReliability is derived from this column.
             fetchStatus: pageReadOk ? 'fetched' : 'failed',
             fetchedAt: pageReadOk ? new Date() : null,
-            tokensUsed: tokens,
+            tokensUsed: pageTokens,
             title: title || src.title,
             contentExcerpt: pageReadOk
               ? (records.length ? `Extracted ${records.length} record(s)` : 'No records extracted')
