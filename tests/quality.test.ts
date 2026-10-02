@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 import { describe, expect, test } from 'bun:test'
-import { qualityScore, validityRate, duplicateRate, sourceCoverage } from '../src/lib/quality'
+import { qualityScore, validityRate, duplicateRate, sourceCoverage, qualityInputFromTask } from '../src/lib/quality'
 
 describe('quality score', () => {
   const base = { status: 'completed', items: 10, valid: 8, sources: 8, duplicates: 0 }
@@ -49,7 +49,6 @@ describe('qualityInputFromTask', () => {
   const expected = { status: 'completed', items: 6, valid: 6, sources: 8, duplicates: 1 }
 
   test('accepts the parsed stats object', () => {
-    const { qualityInputFromTask } = require('../src/lib/quality')
     expect(
       qualityInputFromTask({ status: 'completed', stats: { items: 6, valid: 6, sources: 8, duplicates: 1, tokens: 0 } }),
     ).toEqual(expected)
@@ -58,14 +57,12 @@ describe('qualityInputFromTask', () => {
   test('accepts the raw JSON string a Task row actually carries', () => {
     // This was the live bug: passing the string scored validity as 0, so the
     // task list showed 50 while compare showed 96 for the same task.
-    const { qualityInputFromTask } = require('../src/lib/quality')
     expect(
       qualityInputFromTask({ status: 'completed', stats: '{"items":6,"valid":6,"sources":8,"duplicates":1,"tokens":4360576}' }),
     ).toEqual(expected)
   })
 
   test('falls back to live counts when stats is missing or unparseable', () => {
-    const { qualityInputFromTask } = require('../src/lib/quality')
     const counts = { dataItems: 4, sources: 3 }
     expect(qualityInputFromTask({ status: 'completed', stats: null, _count: counts })).toEqual({
       status: 'completed', items: 4, valid: 0, sources: 3, duplicates: 0,
@@ -74,8 +71,7 @@ describe('qualityInputFromTask', () => {
   })
 
   test('both shapes produce the same score', () => {
-    const { qualityInputFromTask, qualityScore } = require('../src/lib/quality')
-    const a = qualityScore(qualityInputFromTask({ status: 'completed', stats: { items: 6, valid: 6, sources: 8, duplicates: 1, tokens: 0 } }))
+      const a = qualityScore(qualityInputFromTask({ status: 'completed', stats: { items: 6, valid: 6, sources: 8, duplicates: 1, tokens: 0 } }))
     const b = qualityScore(qualityInputFromTask({ status: 'completed', stats: '{"items":6,"valid":6,"sources":8,"duplicates":1}' }))
     expect(a).toBe(b)
     expect(a).toBe(96)
