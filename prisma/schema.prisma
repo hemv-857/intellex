@@ -63,6 +63,10 @@ model DataItem {
   summary     String?
   confidence  Float    @default(0)
   valid       Boolean  @default(true)
+  // The date the content is about, parsed out of the record at write time.
+  // Stored rather than derived per query so date filtering and "latest" sorting
+  // can happen in SQL instead of scanning rows in JS.
+  contentDate DateTime?
   dedupeKey   String?
   sourceId    String?
   createdAt   DateTime @default(now())
@@ -74,6 +78,7 @@ model DataItem {
   @@index([dedupeKey])
   @@index([taskId, createdAt])
   @@index([confidence])
+  @@index([contentDate])
   @@index([sourceId])
   // Dedupe was only ever enforced by an in-memory Set for the duration of one
   // run, so any replay or concurrent run left permanent duplicates. Enforce it.

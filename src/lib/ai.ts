@@ -539,6 +539,9 @@ export async function executeWorkflow(taskId: string): Promise<void> {
         summary: summary.slice(0, 500),
         confidence,
         valid,
+        // Parse the content's own date once, at write time, so search can
+        // filter and sort on it in SQL rather than per row per request.
+        contentDate: extractContentDate(record as Record<string, unknown>),
       }
       if (key) {
         await db.dataItem.upsert({

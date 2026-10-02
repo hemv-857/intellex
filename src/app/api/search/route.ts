@@ -1,68 +1,105 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import { notTrashed, visibleCompleted } from '@/lib/visibility'
 import { rateLimit, schemas, validateBody } from '@/lib/api-utils'
-import { semanticSearch, type SemanticRecord, type SortMode, type DateRange } from '@/lib/ai'
+import { searchRecords } from '@/lib/search'
+import { db } from '@/lib/db'
+import { recencyBoost, type SemanticRecord } from '@/lib/ai'
 
 function safeObj(s?: string | null): any {
   if (!s) return {}
-  try { return JSON.parse(s) } catch { return {} }
+  try {
+    return JSON.parse(s)
+  } catch {
+    return {}
+  }
 }
 
-const VALID_SORTS: SortMode[] = ['relevance', 'latest']
-const VALID_RANGES: DateRange[] = ['any', '7d', '30d', '90d', '365d']
-
-// POST /api/search  { q: string, limit?: number, sort?: 'relevance'|'latest', dateRange?: 'any'|'7d'|'30d'|'90d'|'365d' }
-// Semantic search across all completed-task records using LLM query expansion + relevance scoring.
+// POST /api/search  { q, limit?, sort?, dateRange?, semantic? }
+// Matching runs in SQLite (FTS5, see lib/search.ts) and the LLM is only consulted
+// to widen the query when the literal query finds nothing. This route previously
+// loaded every record of every completed task into memory on each call.
 export const POST = rateLimit({ max: 60, key: 'search' })(async (req: NextRequest) => {
   const body = await req.json().catch(() => ({} as any))
   const parsed = validateBody(schemas.search, body)
   if (!parsed.ok) {
     return NextResponse.json({ error: parsed.error }, { status: 400 })
   }
+
   const q = parsed.data.q.trim()
   const limit = parsed.data.limit
-  const sort: SortMode = parsed.data.sort
-  const dateRange: DateRange = parsed.data.dateRange
+  const sort = parsed.data.sort
+  const dateRange = parsed.data.dateRange
+  // `semantic: false` skips the LLM expansion entirely — one less billed call.
+  const semantic = (body as any).semantic !== false
 
-  // Fetch all completed-task records
-  const tasks = await db.task.findMany({
-    where: visibleCompleted,
-    orderBy: { createdAt: 'desc' },
-    include: { dataItems: { orderBy: { createdAt: 'asc' } } },
+  const { hits: ids, expandedTerms, searched } = await searchRecords({
+    query: q,
+    limit,
+    mode: sort,
+    dateRange,
+    useSemantic: semantic,
   })
 
-  const records: SemanticRecord[] = []
-  for (const t of tasks) {
-    const tags = Array.isArray(safeObj(t.tags)) ? safeObj(t.tags) : []
-    for (const it of t.dataItems) {
-      records.push({
-        id: it.id,
-        taskId: t.id,
-        taskTitle: t.title,
-        title: it.title,
-        summary: it.summary,
-        data: safeObj(it.data),
-        tags,
-        confidence: it.confidence,
-        valid: it.valid,
-        createdAt: it.createdAt.toISOString(),
+  if (ids.length === 0) {
+    return NextResponse.json({
+      query: q,
+      sort,
+      dateRange,
+      total: 0,
+      scanned: 0,
+      searched,
+      expandedTerms,
+      hits: [],
+    })
+  }
+
+  // Only the matched rows are ever loaded.
+  const rows = await db.dataItem.findMany({
+    where: { id: { in: ids.map((h) => h.id) } },
+    include: { task: { select: { id: true, title: true, tags: true } } },
+  })
+
+  const rankById = new Map(ids.map((h) => [h.id, h]))
+  const terms = expandedTerms.length ? expandedTerms : q.split(/\s+/)
+  const hits = rows
+    .map((r): SemanticRecord & { score: number; recencyScore: number; matchedTerms: string[]; contentDate: string | null } => {
+      const tags = Array.isArray(safeObj(r.task.tags)) ? safeObj(r.task.tags) : []
+      const haystack = `${r.title ?? ''} ${r.summary ?? ''} ${r.data} ${r.task.title} ${tags.join(' ')}`.toLowerCase()
+      const matchedTerms = terms.filter((t) => {
+        const token = t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
+        return token.length >= 2 && haystack.includes(token)
       })
-    }
-  }
 
-  if (records.length === 0) {
-    return NextResponse.json({ hits: [], expandedTerms: [], total: 0, message: 'No records to search yet.' })
-  }
+      const record: SemanticRecord = {
+        id: r.id,
+        taskId: r.taskId,
+        taskTitle: r.task.title,
+        title: r.title,
+        summary: r.summary,
+        data: safeObj(r.data),
+        tags,
+        confidence: r.confidence,
+        valid: r.valid,
+        createdAt: r.createdAt.toISOString(),
+      }
 
-  const hits = await semanticSearch(records, q, { limit, sort, dateRange })
+      return {
+        ...record,
+        score: rankById.get(r.id)?.score ?? 0,
+        recencyScore: recencyBoost(r.contentDate?.toISOString() ?? null, record.createdAt),
+        matchedTerms,
+        contentDate: r.contentDate?.toISOString() ?? null,
+      }
+    })
+    .sort((a, b) => (sort === 'latest' ? b.recencyScore - a.recencyScore || b.score - a.score : b.score - a.score))
 
   return NextResponse.json({
     query: q,
     sort,
     dateRange,
     total: hits.length,
-    scanned: records.length,
+    scanned: rows.length,
+    searched,
+    expandedTerms,
     hits,
   })
 })
