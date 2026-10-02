@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { notTrashed } from '@/lib/visibility'
+import { qualityScore as computeQualityScore, validityRate, duplicateRate, sourceCoverage } from '@/lib/quality'
 
 function safeArr(s?: string | null): any[] {
   if (!s) return []
@@ -42,12 +43,11 @@ export async function GET(req: NextRequest) {
     const sources = Number(stats.sources ?? t._count?.sources ?? 0) || 0
     const dups = Number(stats.duplicates ?? 0) || 0
     const tokens = Number(stats.tokens ?? 0) || 0
-    const validityRate = items > 0 ? Math.round((valid / items) * 100) : 0
-    const dupRate = items > 0 ? Math.round((dups / items) * 100) : 0
-    const sourceCoverage = Math.min(100, Math.round((sources / 8) * 100))
-    const qualityScore = items > 0
-      ? Math.round((validityRate / 100) * 50 + (sourceCoverage / 100) * 25 + ((100 - dupRate) / 100) * 25)
-      : 0
+    const validityRatePct = Math.round(validityRate({ items, valid }) * 100)
+    const dupRatePct = Math.round(duplicateRate({ items, duplicates: dups }) * 100)
+    const sourceCoveragePct = Math.round(sourceCoverage(sources) * 100)
+    // Same helper the task list uses, so a task cannot score differently per view.
+    const qualityScore = computeQualityScore({ status: t.status, items, valid, sources, duplicates: dups })
     // unique hosts
     const hosts = new Set<string>()
     for (const s of t.sources || []) {
@@ -70,9 +70,9 @@ export async function GET(req: NextRequest) {
         uniqueHosts: hosts.size,
         duplicates: dups,
         tokens,
-        validityRate,
-        dupRate,
-        sourceCoverage,
+        validityRate: validityRatePct,
+        dupRate: dupRatePct,
+        sourceCoverage: sourceCoveragePct,
         qualityScore,
       },
     }

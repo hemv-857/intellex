@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { TASKS_PAGE_SIZE } from '@/lib/limits'
 import { planWorkflow, buildInitialWorkflow } from '@/lib/ai'
 import { logActivity, rateLimit, schemas, validateBody } from '@/lib/api-utils'
+import { qualityScore as computeQualityScore, qualityInputFromTask } from '@/lib/quality'
 
 // GET /api/tasks?status=&q=&trashed=false  -> list tasks (excludes trashed by default)
 export async function GET(req: NextRequest) {
@@ -28,7 +30,7 @@ export async function GET(req: NextRequest) {
   const tasks = await db.task.findMany({
     where,
     orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }],
-    take: 200,
+    take: TASKS_PAGE_SIZE,
     include: { _count: { select: { dataItems: true, sources: true } } },
   })
 
@@ -52,21 +54,7 @@ export async function GET(req: NextRequest) {
 
   const result = tasks.map((t) => {
     const stats = t.stats ? safeObj(t.stats) : { items: 0, sources: 0, valid: 0, duplicates: 0, tokens: 0 }
-    // Compute a 0-100 data-quality score: weighted blend of validity rate, avg confidence
-    // (proxy: valid/items), source coverage, and low duplicate ratio.
-    const items = Number(stats.items ?? (t as any)._count?.dataItems ?? 0) || 0
-    const valid = Number(stats.valid ?? 0) || 0
-    const sources = Number(stats.sources ?? (t as any)._count?.sources ?? 0) || 0
-    const dups = Number(stats.duplicates ?? 0) || 0
-    let qualityScore = 0
-    if (t.status === 'completed' && items > 0) {
-      const validityRate = valid / items // 0..1
-      const dupPenalty = Math.min(1, dups / items) // 0..1
-      const sourceCoverage = Math.min(1, sources / 8) // 8 sources = full
-      qualityScore = Math.round(
-        (validityRate * 50) + (sourceCoverage * 25) + ((1 - dupPenalty) * 25)
-      )
-    }
+    const qualityScore = computeQualityScore(qualityInputFromTask(t as never))
     return {
       id: t.id,
       title: t.title,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { DATASETS_PAGE_SIZE } from '@/lib/limits'
 import { notTrashed, visibleCompleted } from '@/lib/visibility'
 
 function safeObj(s?: string | null): any {
@@ -56,6 +57,8 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     count: records.length,
+    returned: Math.min(records.length, DATASETS_PAGE_SIZE),
+    truncated: records.length > DATASETS_PAGE_SIZE,
     tasks: tasks.map((t) => ({
       id: t.id,
       title: t.title,
@@ -65,6 +68,6 @@ export async function GET(req: NextRequest) {
       fields: safeObj(t.fields),
       updatedAt: t.updatedAt,
     })),
-    records: records.slice(0, 1000),
+    records: records.slice(0, DATASETS_PAGE_SIZE),
   })
 }

@@ -37,14 +37,25 @@ export function HistoryView({ onOpenTask, onNew }: HistoryProps) {
       .finally(() => setLoading(false))
   }, [])
 
-  // group by day
-  const groups = new Map<string, TaskListItem[]>()
-  for (const t of tasks) {
-    const key = new Date(t.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
-    if (!groups.has(key)) groups.set(key, [])
-    groups.get(key)!.push(t)
+  // Group by day. Tasks arrive pinned-first, which produced out-of-order day groups
+  // (a pinned task from the 25th jumped above the 29th), so sort by date first and
+  // order the day groups newest-first.
+  const byIsoDate = new Map<string, TaskListItem[]>()
+  for (const t of [...tasks].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))) {
+    const iso = new Date(t.createdAt).toISOString().slice(0, 10)
+    if (!byIsoDate.has(iso)) byIsoDate.set(iso, [])
+    byIsoDate.get(iso)!.push(t)
   }
-  const days = [...groups.entries()]
+  const days: [string, TaskListItem[]][] = [...byIsoDate.entries()]
+    .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+    .map(([iso, items]) => [
+      new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      }),
+      items,
+    ])
 
   return (
     <div className="space-y-5 animate-fade-in-up">

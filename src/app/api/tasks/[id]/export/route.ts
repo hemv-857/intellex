@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
 import { db } from '@/lib/db'
+import { EXPORT_MAX_RECORDS } from '@/lib/limits'
 import { rateLimit } from '@/lib/api-utils'
 import { logActivity, safeApi } from '@/lib/api-utils'
 
@@ -33,19 +34,22 @@ export const GET = rateLimit({ max: 30, key: 'export' })(function GET(req: NextR
 
     const task = await db.task.findUnique({
       where: { id },
-      include: { dataItems: { orderBy: { createdAt: 'asc' }, take: 2000 }, sources: true },
+      include: { dataItems: { orderBy: { createdAt: 'asc' }, take: EXPORT_MAX_RECORDS }, sources: true, _count: { select: { dataItems: true } } },
     })
     if (!task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
 
     const fields = safeArr(task.fields).map((f: any) => f.name as string)
-    const items = task.dataItems.map((it) => safeObj(it.data))
+  const items = task.dataItems.map((it) => safeObj(it.data))
+  // The include caps at EXPORT_MAX_RECORDS; say so rather than reporting the
+  // truncated count as if it were the whole dataset.
+  const truncatedAt = (task._count?.dataItems ?? 0) > items.length
 
     // Log export activity (non-blocking, never fail the request on log error)
     void logActivity({
       type: 'export',
       taskId: task.id,
       message: `Exported task "${task.title}" as ${format.toUpperCase()}`,
-      meta: { format, count: items.length },
+      meta: { format, count: items.length, truncated: truncatedAt },
     })
 
     if (format === 'json') {

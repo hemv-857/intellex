@@ -286,10 +286,11 @@ interface ExtractedRecord {
 async function extractFromSource(
   plan: WorkflowPlan,
   source: { url: string; title: string; snippet?: string },
-): Promise<{ records: ExtractedRecord[]; tokens: number; title: string }> {
+): Promise<{ records: ExtractedRecord[]; tokens: number; title: string; pageReadOk: boolean }> {
   const zai = await getZAI()
   let pageData: { title?: string; url?: string; html?: string; publishedTime?: string } | null = null
   let tokens = 0
+  let pageReadOk = true
 
   try {
     const result: any = await withRetry(() => withTimeout(() => zai.functions.invoke('page_reader', { url: source.url }), 45000), 1)
@@ -303,7 +304,10 @@ async function extractFromSource(
       tokens = result.data.usage?.tokens ?? result.meta?.usage?.tokens ?? 0
     }
   } catch (e) {
-    // page_reader failed, fall back to snippet-only extraction
+    // page_reader failed. We still try snippet-only extraction, but the source
+    // must be recorded as failed — the empty catch used to let it be written as
+    // 'fetched', inflating the sourceReliability metric the product reports on.
+    pageReadOk = false
   }
 
   const title = pageData?.title || source.title
@@ -325,10 +329,11 @@ async function extractFromSource(
     thinking: { type: 'disabled' },
   })
 
+  tokens += completion.usage?.total_tokens ?? completion.usage?.completion_tokens ?? 0
   const raw = completion.choices[0]?.message?.content ?? ''
   const parsed = safeJsonParse<{ records?: ExtractedRecord[] }>(raw, { records: [] })
   const records = Array.isArray(parsed.records) ? parsed.records : []
-  return { records, tokens, title }
+  return { records, tokens, title, pageReadOk }
 }
 
 export async function executeWorkflow(taskId: string): Promise<void> {
@@ -444,16 +449,20 @@ export async function executeWorkflow(taskId: string): Promise<void> {
         total: sourceRows.length,
       })
       try {
-        const { records, tokens, title } = await extractFromSource(plan, { url: src.url, title: src.title || '', snippet: src.snippet || '' })
+        const { records, tokens, title, pageReadOk } = await extractFromSource(plan, { url: src.url, title: src.title || '', snippet: src.snippet || '' })
         stats.tokens += tokens
         await db.dataSource.update({
           where: { id: src.id },
           data: {
-            fetchStatus: 'fetched',
-            fetchedAt: new Date(),
+            // Honest status: a snippet-only extraction is not a successful page
+            // read, and sourceReliability is derived from this column.
+            fetchStatus: pageReadOk ? 'fetched' : 'failed',
+            fetchedAt: pageReadOk ? new Date() : null,
             tokensUsed: tokens,
             title: title || src.title,
-            contentExcerpt: (records.length ? `Extracted ${records.length} record(s)` : 'No records extracted'),
+            contentExcerpt: pageReadOk
+              ? (records.length ? `Extracted ${records.length} record(s)` : 'No records extracted')
+              : 'Page read failed — extracted from search snippet only',
           },
         })
         for (const record of records) {
@@ -510,8 +519,12 @@ export async function executeWorkflow(taskId: string): Promise<void> {
       }).filter(Boolean)
       const summary = summaryParts.join(' · ')
 
-      await db.dataItem.create({
-        data: {
+      // upsert rather than create: (taskId, dedupeKey) is now a real unique
+      // constraint, so a replayed or concurrent run would otherwise throw and
+      // abort the whole run half way through.
+      await db.dataItem.upsert({
+        where: { taskId_dedupeKey: { taskId, dedupeKey: key || null } },
+        create: {
           taskId,
           sourceId,
           data: JSON.stringify(record),
@@ -520,6 +533,14 @@ export async function executeWorkflow(taskId: string): Promise<void> {
           confidence,
           valid,
           dedupeKey: key || null,
+        },
+        update: {
+          sourceId,
+          data: JSON.stringify(record),
+          title: itemTitle.slice(0, 300),
+          summary: summary.slice(0, 500),
+          confidence,
+          valid,
         },
       })
       if (valid) validCount++
@@ -543,6 +564,7 @@ export async function executeWorkflow(taskId: string): Promise<void> {
         stats: JSON.stringify(stats),
         startedAt: null,
         runToken: null,
+        completedAt: new Date(),
       },
     })
   } catch (e) {

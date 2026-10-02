@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { SOURCES_PAGE_SIZE } from '@/lib/limits'
 import { visibleTaskIds } from '@/lib/visibility'
 
 // GET /api/sources?q=&host=&status=  -> list all sources across tasks
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest) {
   const sources = await db.dataSource.findMany({
     where: { ...where, taskId: { in: visibleIds } },
     orderBy: { createdAt: 'desc' },
-    take: 300,
+    take: SOURCES_PAGE_SIZE,
     include: { task: { select: { id: true, title: true } } },
   })
 

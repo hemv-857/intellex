@@ -26,7 +26,7 @@ export const GET = rateLimit({ max: 60, key: 'insights' })(function GET() {
     // Pull all completed-task data items + their task's field schema + source URL.
     const tasks = await db.task.findMany({
       where: visibleCompleted,
-      select: { id: true, fields: true, tags: true, stats: true, createdAt: true },
+      select: { id: true, fields: true, tags: true, stats: true, createdAt: true, completedAt: true },
     })
     const taskIdSet = new Set(tasks.map((t) => t.id))
     if (taskIdSet.size === 0) {
@@ -151,7 +151,8 @@ export const GET = rateLimit({ max: 60, key: 'insights' })(function GET() {
       dayBuckets.set(key, { sum: 0, count: 0 })
     }
     for (const t of tasks) {
-      const key = t.createdAt.toISOString().slice(0, 10)
+      // Fall back to createdAt for tasks collected before completedAt existed.
+      const key = (t.completedAt ?? t.createdAt).toISOString().slice(0, 10)
       const bucket = dayBuckets.get(key)
       if (!bucket) continue
       const stats = safeObj(t.stats)
