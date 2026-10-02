@@ -66,6 +66,7 @@ export function Sidebar({ section, onNavigate, taskCount = 0, runningCount = 0, 
           return (
             <button
               key={item.id}
+              data-tour={item.id}
               onClick={() => onNavigate(item.id)}
               className={cn(
                 'group w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all',
@@ -128,6 +129,7 @@ export function Sidebar({ section, onNavigate, taskCount = 0, runningCount = 0, 
       {/* Footer toolbar — quick actions */}
       <div className="shrink-0 border-t border-sidebar-border px-3 py-2.5 space-y-1.5 bg-sidebar/80">
         <button
+          data-tour="quick-actions"
           onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
           className="flex w-full items-center justify-between rounded-lg border border-sidebar-border bg-card/60 px-2.5 py-1.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
         >
@@ -136,7 +138,7 @@ export function Sidebar({ section, onNavigate, taskCount = 0, runningCount = 0, 
           </span>
           <kbd className="h-4 px-1 rounded border border-border bg-muted text-[9px] font-mono">⌘K</kbd>
         </button>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1" data-tour="sidebar-tools">
           <ToolbarButton icon={TemplateIcon} label="Templates" onClick={() => window.dispatchEvent(new CustomEvent('intellex:open-templates'))} />
           <ToolbarButton icon={InsightsIcon} label="Insights" onClick={() => window.dispatchEvent(new CustomEvent('intellex:open-insights'))} />
           <ToolbarButton icon={ActivityIcon} label="Activity" onClick={() => window.dispatchEvent(new CustomEvent('intellex:open-activity'))} />
