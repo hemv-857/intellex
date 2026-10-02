@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Progress } from '@/components/ui/progress'
 import {
@@ -20,6 +21,7 @@ import {
   Database,
   Globe,
   TrendingUp,
+  Download,
   Tag,
 } from 'lucide-react'
 import { api } from './shared'
@@ -38,6 +40,105 @@ interface Insights {
 }
 
 const CHART_COLORS = ['#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#8b5cf6', '#ec4899']
+
+// Same print-to-PDF approach as the Compare modal: a self-contained HTML
+// document written into a new window and handed to window.print(). No dependency,
+// vector output, and the user picks paper size and orientation.
+function esc(v: unknown): string {
+  return String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function bar(rate: number, tone: string): string {
+  const pct = Math.max(0, Math.min(100, rate))
+  return `<div class="bar"><div class="fill ${tone}" style="width:${pct}%"></div></div>`
+}
+
+function exportReport(d: Insights) {
+  const rows = (list: string[]) => list.join('')
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Intellex — Data Quality Report</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #0f172a; margin: 0; padding: 32px; background: #fff; }
+  .header { display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #10b981; padding-bottom: 14px; }
+  .logo { width: 38px; height: 38px; border-radius: 10px; background: #10b981; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; }
+  h1 { font-size: 19px; margin: 0; } .sub { font-size: 11px; color: #64748b; margin-top: 2px; }
+  .meta { font-size: 10px; color: #94a3b8; margin: 10px 0 20px; }
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 22px; }
+  .card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; }
+  .card .label { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
+  .card .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  h2 { font-size: 13px; margin: 20px 0 8px; padding-bottom: 5px; border-bottom: 1px solid #e2e8f0; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid #f1f5f9; }
+  th { color: #64748b; font-weight: 600; text-transform: uppercase; font-size: 9.5px; letter-spacing: .04em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .bar { height: 5px; background: #f1f5f9; border-radius: 3px; overflow: hidden; min-width: 70px; }
+  .fill { height: 100%; } .good { background: #10b981; } .mid { background: #f59e0b; } .bad { background: #ef4444; } .info { background: #0ea5e9; }
+  .tags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .tag { font-size: 10px; background: #f1f5f9; border-radius: 4px; padding: 2px 7px; color: #475569; }
+  .footer { margin-top: 26px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 9.5px; color: #94a3b8; text-align: center; }
+  @media print { body { padding: 16px; } }
+</style></head><body>
+  <div class="header"><div class="logo">I</div><div><h1>Data Quality Report</h1><div class="sub">Intellex · AI-Powered Data Intelligence Platform</div></div></div>
+  <div class="meta">Generated ${esc(new Date().toLocaleString())}</div>
+
+  <div class="cards">
+    <div class="card"><div class="label">Total records</div><div class="value">${esc(d.totalRecords)}</div></div>
+    <div class="card"><div class="label">Valid records</div><div class="value">${esc(d.validRecords)}</div></div>
+    <div class="card"><div class="label">Validity rate</div><div class="value">${esc(d.validityRate)}%</div></div>
+    <div class="card"><div class="label">Avg confidence</div><div class="value">${esc(d.avgConfidence)}%</div></div>
+  </div>
+
+  <h2>Confidence distribution</h2>
+  <table><thead><tr><th>Bucket</th><th class="num">Records</th><th class="num">Share</th><th>Distribution</th></tr></thead><tbody>
+    ${rows([
+      { label: 'High (≥75%)', n: d.confidenceBuckets.high, tone: 'good' },
+      { label: 'Medium (50–74%)', n: d.confidenceBuckets.medium, tone: 'mid' },
+      { label: 'Low (<50%)', n: d.confidenceBuckets.low, tone: 'bad' },
+    ].map((b) => {
+      const share = d.totalRecords > 0 ? (b.n / d.totalRecords) * 100 : 0
+      return `<tr><td>${esc(b.label)}</td><td class="num">${esc(b.n)}</td><td class="num">${share.toFixed(1)}%</td><td>${bar(share, b.tone)}</td></tr>`
+    }))}
+  </tbody></table>
+
+  <h2>Field completeness</h2>
+  <table><thead><tr><th>Field</th><th class="num">Filled</th><th class="num">Total</th><th class="num">Rate</th><th>Coverage</th></tr></thead><tbody>
+    ${rows(d.fieldCompleteness.slice(0, 40).map((f) =>
+      `<tr><td>${esc(f.field)}</td><td class="num">${esc(f.filled)}</td><td class="num">${esc(f.total)}</td><td class="num">${esc(f.rate)}%</td><td>${bar(f.rate, f.rate >= 80 ? 'good' : f.rate >= 50 ? 'mid' : 'bad')}</td></tr>`))}
+  </tbody></table>
+
+  <h2>Source reliability</h2>
+  <table><thead><tr><th>Host</th><th class="num">Read</th><th class="num">Failed</th><th class="num">Rate</th><th>Reliability</th></tr></thead><tbody>
+    ${rows(d.sourceReliability.map((h) =>
+      `<tr><td>${esc(h.hostName)}</td><td class="num">${esc(h.fetched)}</td><td class="num">${esc(h.failed)}</td><td class="num">${esc(h.rate)}%</td><td>${bar(h.rate, h.rate >= 80 ? 'good' : h.rate >= 50 ? 'mid' : 'bad')}</td></tr>`))}
+  </tbody></table>
+
+  <h2>Quality score trend (last 14 days)</h2>
+  <table><thead><tr><th>Date</th><th class="num">Avg score</th><th class="num">Tasks</th><th>Score</th></tr></thead><tbody>
+    ${rows(d.qualityTrend.filter((t) => t.tasks > 0).map((t) =>
+      `<tr><td>${esc(t.date)}</td><td class="num">${esc(t.avgScore)}</td><td class="num">${esc(t.tasks)}</td><td>${bar(t.avgScore, t.avgScore >= 80 ? 'good' : t.avgScore >= 60 ? 'mid' : 'bad')}</td></tr>`))}
+  </tbody></table>
+
+  <h2>Top tags</h2>
+  <div class="tags">${rows(d.topTags.map((t) => `<span class="tag">${esc(t.tag)} · ${esc(t.count)}</span>`))}</div>
+
+  <div class="footer">Intellex · Prompt → Plan → Collect → Clean → Export · Generated ${esc(new Date().toISOString())}</div>
+  <script>window.onload=function(){setTimeout(function(){window.print()},400)}<\/script>
+</body></html>`
+
+  const w = window.open('', '_blank')
+  if (!w) {
+    toast.error('Pop-up blocked — allow pop-ups to export the report.')
+    return
+  }
+  w.document.write(html)
+  w.document.close()
+}
 
 export function InsightsModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const [data, setData] = useState<Insights | null>(null)
@@ -61,6 +162,17 @@ export function InsightsModal({ open, onOpenChange }: { open: boolean; onOpenCha
             <TrendingUp className="h-4 w-4 text-emerald-500" /> Data Quality Insights
           </DialogTitle>
           <DialogDescription>Platform-wide health of your collected datasets</DialogDescription>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!data || loading}
+              onClick={() => data && exportReport(data)}
+              title="Export as PDF"
+            >
+              <Download className="h-3.5 w-3.5" /> Export PDF
+            </Button>
+          </div>
         </DialogHeader>
         <ScrollArea className="max-h-[70vh] scrollbar-thin">
           <div className="p-5 space-y-5">
