@@ -98,7 +98,7 @@ export const schemas = {
     }),
   bulkTasks: z.object({
     ids: z.array(z.string().min(1)).min(1).max(500),
-    action: z.enum(['delete', 'purge', 'restore', 'pin', 'unpin']),
+    action: z.enum(['delete', 'purge', 'restore', 'pin', 'unpin', 'duplicate']),
   }),
   search: z.object({
     q: z.string().min(1).max(500),

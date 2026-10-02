@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { logActivity, rateLimit, schemas, validateBody } from '@/lib/api-utils'
+import { duplicateTask } from '@/lib/duplicate'
 
-// POST /api/tasks/bulk  { ids: string[], action: 'delete' | 'purge' | 'restore' | 'pin' | 'unpin' }
+// POST /api/tasks/bulk  { ids: string[], action: 'delete' | 'purge' | 'restore' | 'pin' | 'unpin' | 'duplicate' }
 export const POST = rateLimit({ max: 20, key: 'bulk' })(async (req: NextRequest) => {
   const body = await req.json().catch(() => ({} as any))
   const parsed = validateBody(schemas.bulkTasks, body)
@@ -34,6 +35,23 @@ export const POST = rateLimit({ max: 20, key: 'bulk' })(async (req: NextRequest)
     for (const t of tasks) {
       await logActivity({ type: 'task_restored', taskId: t.id, message: `Restored task "${t.title}" from trash (bulk)`, meta: { bulk: true } })
     }
+  } else if (action === 'duplicate') {
+    // Clones share one implementation with the single-task duplicate route.
+    const created: Array<{ id: string; title: string }> = []
+    const errors: Array<{ id: string; error: string }> = []
+    for (const id of foundIds) {
+      const r = await duplicateTask(id)
+      if ('error' in r) errors.push({ id, error: r.error })
+      else created.push({ id: r.id, title: r.title })
+    }
+    return NextResponse.json({
+      ok: errors.length === 0,
+      action,
+      affected: created.length,
+      requested: ids.length,
+      created,
+      errors,
+    })
   } else if (action === 'pin' || action === 'unpin') {
     const pinned = action === 'pin'
     const r = await db.task.updateMany({ where: { id: { in: foundIds } }, data: { pinned } })

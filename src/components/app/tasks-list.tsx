@@ -160,14 +160,23 @@ export function TasksList({ onOpenTask, onNew }: TasksListProps) {
     }
   }
 
-  const handleBulk = async (action: 'delete' | 'purge' | 'restore' | 'pin' | 'unpin') => {
+  const BULK_VERBS: Record<string, string> = {
+    delete: 'moved to trash',
+    purge: 'permanently deleted',
+    restore: 'restored',
+    pin: 'pinned',
+    unpin: 'unpinned',
+    duplicate: 'duplicated',
+  }
+
+  const handleBulk = async (action: 'delete' | 'purge' | 'restore' | 'pin' | 'unpin' | 'duplicate') => {
     if (selected.size === 0) return
     try {
-      const res = await api<{ affected: number }>(`/api/tasks/bulk`, {
+      const res = await api<{ affected: number; created?: Array<{ title: string }> }>(`/api/tasks/bulk`, {
         method: 'POST',
         body: JSON.stringify({ ids: [...selected], action }),
       })
-      toast.success(`${res.affected} task(s) ${action === 'delete' ? 'moved to trash' : action === 'purge' ? 'permanently deleted' : action === 'restore' ? 'restored' : action === 'pin' ? 'pinned' : 'unpinned'}.`)
+      toast.success(`${res.affected} task(s) ${BULK_VERBS[action] ?? action}.`)
       load()
     } catch (e) {
       toast.error((e as Error).message || 'Bulk operation failed')
@@ -289,6 +298,7 @@ export function TasksList({ onOpenTask, onNew }: TasksListProps) {
             {view === 'active' ? (
               <>
                 <Button size="sm" variant="ghost" onClick={() => handleBulk('pin')} className="h-7 text-xs">
+                  <Copy className="h-3 w-3 mr-1" /> Duplicate
                   <Pin className="h-3 w-3 mr-1" /> Pin all
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => handleBulk('unpin')} className="h-7 text-xs">
