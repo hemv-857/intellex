@@ -40,6 +40,19 @@ export function proxy(req: NextRequest) {
   if (!safeEqual(provided, expected)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  // Defence in depth against CSRF. The session cookie is already SameSite=Lax so
+  // a cross-site form POST cannot carry it, but a same-site subdomain or a
+  // browser without Lax enforcement would still land here. A cross-origin
+  // mutation is refused outright. No Origin header (curl, server-to-server) is
+  // allowed through.
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    const origin = req.headers.get('origin')
+    if (origin && origin !== req.nextUrl.origin) {
+      return NextResponse.json({ error: 'Cross-origin request refused' }, { status: 403 })
+    }
+  }
+
   return NextResponse.next()
 }
 

@@ -167,13 +167,13 @@ export function CompareModal({ open, onOpenChange, tasks, initialA, initialB }: 
   </div>
   <div class="meta">Generated ${new Date().toLocaleString()}</div>
   <div class="tasks">
-    <div class="task-card a"><div class="label">Task A</div><div class="title">${a.title.replace(/</g, '&lt;')}</div><div class="age">${a.tags.join(' · ') || '—'} · ${timeAgo(a.createdAt)}</div></div>
-    <div class="task-card b"><div class="label">Task B</div><div class="title">${b.title.replace(/</g, '&lt;')}</div><div class="age">${b.tags.join(' · ') || '—'} · ${timeAgo(b.createdAt)}</div></div>
+    <div class="task-card a"><div class="label">Task A</div><div class="title">${esc(a.title)}</div><div class="age">${esc(a.tags.join(' · ') || '—')} · ${esc(timeAgo(a.createdAt))}</div></div>
+    <div class="task-card b"><div class="label">Task B</div><div class="title">${esc(b.title)}</div><div class="age">${esc(b.tags.join(' · ') || '—')} · ${esc(timeAgo(b.createdAt))}</div></div>
   </div>
   <table>
     <thead><tr><th>Metric</th><th class="a">Task A</th><th class="b">Task B</th></tr></thead>
     <tbody>
-      ${rows.map((r) => `<tr><td>${r.label}</td><td class="a ${r.winner === 'a' ? 'win' : ''}">${r.a}</td><td class="b ${r.winner === 'b' ? 'win-b' : ''}">${r.b}</td></tr>`).join('')}
+      ${rows.map((r) => `<tr><td>${esc(r.label)}</td><td class="a ${r.winner === 'a' ? 'win' : ''}">${esc(r.a)}</td><td class="b ${r.winner === 'b' ? 'win-b' : ''}">${esc(r.b)}</td></tr>`).join('')}
     </tbody>
   </table>
   <div class="quality">
@@ -182,7 +182,7 @@ export function CompareModal({ open, onOpenChange, tasks, initialA, initialB }: 
   </div>
   <div class="verdict">
     <h3>🏆 Verdict: ${winnerLabel}</h3>
-    <p>${winnerLabel === 'Tie' ? 'Both tasks perform comparably — ' + aWins + ' metric(s) each favor A and B respectively.' : winnerLabel + ' (' + winnerTask.title.replace(/</g, '&lt;') + ') leads in ' + Math.max(aWins, bWins) + ' of ' + (aWins + bWins) + ' differentiated metrics, with a quality score of ' + winnerTask.metrics.qualityScore + '/100.'}</p>
+    <p>${winnerLabel === 'Tie' ? 'Both tasks perform comparably — ' + aWins + ' metric(s) each favor A and B respectively.' : esc(winnerLabel) + ' (' + esc(winnerTask.title) + ') leads in ' + Math.max(aWins, bWins) + ' of ' + (aWins + bWins) + ' differentiated metrics, with a quality score of ' + winnerTask.metrics.qualityScore + '/100.'}</p>
   </div>
   <div class="footer">Intellex · Prompt → Plan → Collect → Clean → Export · Generated ${new Date().toISOString()}</div>
   <script>window.onload=function(){setTimeout(function(){window.print()},300)}</script>
