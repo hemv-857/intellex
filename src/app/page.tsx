@@ -163,29 +163,14 @@ function Intellex() {
         .then((d) => setActivityCount(d.activities.length))
         .catch(() => {})
     }
-    const tickScheduler = () => {
-      const key = process.env.NEXT_PUBLIC_SCHEDULER_KEY
-      if (!key) return
-      fetch(`/api/scheduler/tick?key=${encodeURIComponent(key)}`).catch(() => {})
-    }
-    const purgeTrash = () => {
-      const key = process.env.NEXT_PUBLIC_SCHEDULER_KEY
-      if (!key) return
-      fetch(`/api/scheduler/purge-trash?key=${encodeURIComponent(key)}`, { method: 'POST' }).catch(() => {})
-    }
     load()
     loadActivity()
     // Tasks poll every 5s (for running status); activity bell poll every 30s (less critical)
     const i = setInterval(load, 5000)
     const a = setInterval(loadActivity, 30000)
-    const s = setInterval(tickScheduler, 60000) // tick scheduler every 60s
-    tickScheduler() // initial
-    const p = setInterval(purgeTrash, 300000) // purge trash older than 30 days every 5 min (cheap + idempotent)
     return () => {
       clearInterval(i)
       clearInterval(a)
-      clearInterval(s)
-      clearInterval(p)
     }
   }, [])
 
