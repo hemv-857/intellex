@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { rateLimit } from '@/lib/api-utils'
+import { isSchedulerDisabled, schedulerKeyMatches } from '@/lib/scheduler-auth'
 import { executeWorkflow, isRunning, markRunning, markDone } from '@/lib/ai'
 
 // ---------------------------------------------------------------------------
@@ -117,9 +118,10 @@ async function runTick(): Promise<{ processed: number; taskIds: string[] }> {
 // Shared handler — accepts GET or POST. Requires ?key= matching SCHEDULER_KEY env.
 async function handler(req: NextRequest): Promise<Response> {
   const { searchParams } = new URL(req.url)
-  const key = searchParams.get('key') || ''
-  const expected = process.env.SCHEDULER_KEY || 'intellex-dev'
-  if (key !== expected) {
+  if (isSchedulerDisabled()) {
+    return NextResponse.json({ error: 'Scheduler disabled: SCHEDULER_KEY is not set' }, { status: 503 })
+  }
+  if (!schedulerKeyMatches(searchParams.get('key'))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

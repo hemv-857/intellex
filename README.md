@@ -21,18 +21,16 @@ Requires Bun and Node 20+.
 ```bash
 bun install
 
-cat > .env <<'EOF'
-DATABASE_URL=file:/absolute/path/to/this/repo/db/custom.db
-EOF
+cp .env.example .env    # then fill in DATABASE_URL and SCHEDULER_KEY
 
 bun run db:generate
 bun run db:push     # creates db/custom.db and the schema
 bun run dev         # http://localhost:3000
 ```
 
-`DATABASE_URL` must point at a writable SQLite file. A relative `file:` value is resolved by Prisma against `prisma/schema.prisma`, so from the repo root use `file:../db/custom.db`.
+`DATABASE_URL` must point at a writable SQLite file. A relative `file:` value is resolved by Prisma against `prisma/schema.prisma`, so from the repo root use `file:../db/custom.db`. Generate a scheduler key with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
 
-Other scripts: `bun run build`, `bun run start`, `bun run lint`, `bun run db:reset`.
+Other scripts: `bun run build`, `bun run start`, `bun run lint`, `bun test`, `bun run db:reset`.
 
 `.zscripts/` holds container-oriented helpers (`dev.sh`, `build.sh`, `start.sh`, mini-service and Python runtime builds). You do not need them for local development.
 
@@ -88,14 +86,17 @@ worklog.md            build + QA log, 14 phases, including root-cause notes on t
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `DATABASE_URL` | yes | SQLite file path |
-| `SCHEDULER_KEY` | no | Shared secret for `/api/scheduler/*`. **Defaults to `intellex-dev`** |
-| `NEXT_PUBLIC_SCHEDULER_KEY` | no | Key the browser uses when polling the scheduler tick |
+| `SCHEDULER_KEY` | for scheduling | Shared secret for `/api/scheduler/*`. **Unset means the scheduler is disabled** — the endpoints return `503`, they do not fall back to a default |
+| `NEXT_PUBLIC_SCHEDULER_KEY` | for browser-triggered scheduling | Same value, exposed to the client so it can poll the tick |
 
-Set `SCHEDULER_KEY` to a real secret before exposing this to a network — the dev fallback is a literal in the source and therefore public. The frontend also needs the key in `NEXT_PUBLIC_SCHEDULER_KEY` to poll.
+The scheduler endpoints are the only mutating routes that do not authenticate a user, so they **fail closed**: no configured key means no scheduling, and the comparison is timing-safe.
+
+Because `NEXT_PUBLIC_*` values are inlined into the JS bundle, any visitor can read that key and trigger the tick themselves — the client-polling model makes the key public by design. For a deployed instance, drive `/api/scheduler/tick` from cron or a launchd timer with a real `SCHEDULER_KEY` and leave `NEXT_PUBLIC_SCHEDULER_KEY` unset, so the browser never holds it.
 
 ## Known limitations
 
 - Collection execution is fire-and-forget inside the Next.js process. Fine for dev; a durable job queue is needed for production-grade reliability.
+- Scheduling is triggered by whoever polls the tick endpoint. Server-side cron (rather than browser polling) is the right shape for a deployment, and is not implemented here.
 - Rate limiting is per-IP and in-memory, so it resets on restart and does not span instances.
 - Tag filtering runs in memory rather than in SQL — fine at this scale, not at large row counts.
 - `page_reader` returns empty HTML for some JavaScript-heavy sites. Those sources are marked failed and the run continues.

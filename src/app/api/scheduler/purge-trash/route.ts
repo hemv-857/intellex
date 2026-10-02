@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { logActivity, rateLimit } from '@/lib/api-utils'
+import { isSchedulerDisabled, schedulerKeyMatches } from '@/lib/scheduler-auth'
 
 const MAX_AGE_DAYS = 30
 
@@ -9,7 +10,10 @@ const MAX_AGE_DAYS = 30
 // Idempotent + safe to call repeatedly.
 export const POST = rateLimit({ max: 10, key: 'purge-trash' })(async (req: NextRequest) => {
   const key = req.nextUrl?.searchParams?.get('key') || new URL(req.url).searchParams.get('key')
-  if (key !== (process.env.SCHEDULER_KEY || 'intellex-dev')) {
+  if (isSchedulerDisabled()) {
+    return NextResponse.json({ error: 'Scheduler disabled: SCHEDULER_KEY is not set' }, { status: 503 })
+  }
+  if (!schedulerKeyMatches(key)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const cutoff = new Date(Date.now() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000)

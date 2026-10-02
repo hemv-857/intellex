@@ -155,7 +155,14 @@ export default function Home() {
         .catch(() => {})
     }
     const tickScheduler = () => {
-      fetch(`/api/scheduler/tick?key=${process.env.NEXT_PUBLIC_SCHEDULER_KEY || 'intellex-dev'}`).catch(() => {})
+      const key = process.env.NEXT_PUBLIC_SCHEDULER_KEY
+      if (!key) return
+      fetch(`/api/scheduler/tick?key=${encodeURIComponent(key)}`).catch(() => {})
+    }
+    const purgeTrash = () => {
+      const key = process.env.NEXT_PUBLIC_SCHEDULER_KEY
+      if (!key) return
+      fetch(`/api/scheduler/purge-trash?key=${encodeURIComponent(key)}`, { method: 'POST' }).catch(() => {})
     }
     load()
     loadActivity()
@@ -164,15 +171,7 @@ export default function Home() {
     const a = setInterval(loadActivity, 30000)
     const s = setInterval(tickScheduler, 60000) // tick scheduler every 60s
     tickScheduler() // initial
-    // Purge trash older than 30 days every ~5 min (cheap + idempotent)
-    let tickCount = 0
-    const purgeTrash = () => {
-      fetch(`/api/scheduler/purge-trash?key=${process.env.NEXT_PUBLIC_SCHEDULER_KEY || 'intellex-dev'}`, { method: 'POST' }).catch(() => {})
-    }
-    const p = setInterval(() => {
-      tickCount++
-      if (tickCount % 5 === 0) purgeTrash()
-    }, 60000)
+    const p = setInterval(purgeTrash, 300000) // purge trash older than 30 days every 5 min (cheap + idempotent)
     return () => {
       clearInterval(i)
       clearInterval(a)
