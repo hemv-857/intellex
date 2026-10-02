@@ -28,6 +28,11 @@ model Task {
   schedule      String? // JSON: { enabled, intervalMinutes, nextRunAt, lastRunAt } | null
   pinned        Boolean  @default(false)
   trashedAt     DateTime? // soft-delete: when set, task is in trash
+  // Run lease. startedAt is set when a run claims the task; a run whose lease is
+  // older than STALE_RUN_MS is considered dead (crash, redeploy, HMR) and is
+  // reclaimed by the reaper instead of blocking the task forever.
+  startedAt     DateTime?
+  runToken      String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

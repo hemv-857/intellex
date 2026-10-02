@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { rateLimit } from '@/lib/api-utils'
 import { isSchedulerDisabled, schedulerKeyMatches } from '@/lib/scheduler-auth'
+import { claimRun, releaseRun, reapStaleRuns } from '@/lib/run-lease'
 import { executeWorkflow, isRunning, markRunning, markDone } from '@/lib/ai'
+import { randomUUID } from 'node:crypto'
 
 // ---------------------------------------------------------------------------
 // Scheduler tick — finds due scheduled tasks and kicks them off (fire-and-forget)
@@ -69,26 +71,24 @@ async function runTick(): Promise<{ processed: number; taskIds: string[] }> {
   const processedIds: string[] = []
   for (const d of due) {
     try {
-      // 1) Advance the schedule first so a duplicate tick can't re-fire it
-      const nextRunAt = new Date(now + d.intervalMinutes * 60_000).toISOString()
+      // 1) Claim the lease atomically. A stale lease (crashed run) is reclaimable;
+      //    a live one means someone is already running this task, so skip it.
+      const token = randomUUID()
+      const lease = await claimRun(d.id, token)
+      if (!lease) continue
+
+      // 2) Advance the schedule first so a duplicate tick can't re-fire it.
+      //    Preserves whatever interval is configured right now rather than the
+      //    value read at scan time.
       await db.task.update({
         where: { id: d.id },
         data: {
           schedule: JSON.stringify({
             enabled: true,
             intervalMinutes: d.intervalMinutes,
-            nextRunAt,
+            nextRunAt: new Date(now + d.intervalMinutes * 60_000).toISOString(),
             lastRunAt: nowIso,
           } satisfies ScheduleConfig),
-        },
-      })
-
-      // 2) Reset transient state (mirrors the /run route pattern)
-      await db.task.update({
-        where: { id: d.id },
-        data: {
-          status: 'running',
-          error: null,
           progress: JSON.stringify({
             step: 'search',
             message: 'Scheduled run starting…',
@@ -97,14 +97,18 @@ async function runTick(): Promise<{ processed: number; taskIds: string[] }> {
           }),
         },
       })
-      await db.dataItem.deleteMany({ where: { taskId: d.id } })
-      await db.dataSource.deleteMany({ where: { taskId: d.id } })
 
-      // 3) Fire-and-forget the workflow (process stays alive in `next dev`)
+      // 3) Clear the previous attempt in one transaction.
+      await db.$transaction([
+        db.dataItem.deleteMany({ where: { taskId: d.id } }),
+        db.dataSource.deleteMany({ where: { taskId: d.id } }),
+      ])
+
+      // 4) Fire-and-forget the workflow
       markRunning(d.id)
       executeWorkflow(d.id)
         .catch((e) => console.error('scheduled workflow failed', d.id, e))
-        .finally(() => markDone(d.id))
+        .finally(() => releaseRun(d.id, token))
 
       processedIds.push(d.id)
     } catch (e) {
@@ -125,9 +129,13 @@ async function handler(req: NextRequest): Promise<Response> {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // Reclaim runs whose lease expired before scheduling anything new, so a task
+  // killed by a crash or redeploy stops showing as perpetually running.
+  const reaped = await reapStaleRuns()
+
   // Returns immediately after queueing fire-and-forget work.
   const result = await runTick()
-  return NextResponse.json(result)
+  return NextResponse.json({ ...result, reaped })
 }
 
 // GET /api/scheduler/tick?key=...

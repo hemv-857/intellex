@@ -541,11 +541,19 @@ export async function executeWorkflow(taskId: string): Promise<void> {
         workflow: JSON.stringify(workflow),
         progress: JSON.stringify({ step: 'finalize', message: 'Dataset ready', current: 1, total: 1 }),
         stats: JSON.stringify(stats),
+        startedAt: null,
+        runToken: null,
       },
     })
   } catch (e) {
     const msg = (e as Error).message || 'Unknown execution error'
-    setStep('running' as any, 'failed', msg)
+    // Mark whichever step was in flight, not a literal 'running' step id (which
+    // never exists, so the failure used to be silently dropped).
+    const current = workflow.find((w) => w.status === 'running') || workflow[workflow.length - 1]
+    if (current) {
+      current.status = 'failed'
+      current.detail = msg
+    }
     await db.task.update({
       where: { id: taskId },
       data: {
@@ -554,6 +562,8 @@ export async function executeWorkflow(taskId: string): Promise<void> {
         workflow: JSON.stringify(workflow),
         stats: JSON.stringify(stats),
         progress: JSON.stringify({ step: 'error', message: msg, current: 0, total: 0 }),
+        startedAt: null,
+        runToken: null,
       },
     })
   }

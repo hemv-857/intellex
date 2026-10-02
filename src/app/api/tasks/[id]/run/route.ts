@@ -1,19 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { executeWorkflow, isRunning, markRunning, markDone } from '@/lib/ai'
-import { logActivity } from '@/lib/api-utils'
+import { logActivity, rateLimit } from '@/lib/api-utils'
+import { claimRun, releaseRun, isRunActive } from '@/lib/run-lease'
+import { executeWorkflow, isRunning } from '@/lib/ai'
+import { randomUUID } from 'node:crypto'
 
-// POST /api/tasks/[id]/run  -> kick off workflow execution (async, fire-and-forget)
-export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+// POST /api/tasks/[id]/run
+// Claims a run lease, clears the previous attempt, then fires the engine without
+// awaiting it. The lease (not the status string) is what blocks a concurrent run,
+// so a run killed by a crash or redeploy becomes re-runnable once its lease
+// expires rather than being stuck 'running' forever.
+export const POST = rateLimit({ max: 20, key: 'task-run' })(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params
-  const task = await db.task.findUnique({ where: { id } })
+  const task = await db.task.findUnique({ where: { id }, select: { id: true, title: true } })
   if (!task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
 
-  if (task.status === 'running' || isRunning(id)) {
+  if (isRunning(id) || (await isRunActive(id))) {
     return NextResponse.json({ ok: true, status: 'already-running', message: 'Task is already running' })
   }
 
-  // reset transient state then mark running
+  const token = randomUUID()
+  const lease = await claimRun(id, token)
+  if (!lease) {
+    return NextResponse.json({ ok: true, status: 'already-running', message: 'Task is already running' })
+  }
+
   await db.task.update({
     where: { id },
     data: {
@@ -22,22 +33,19 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       progress: JSON.stringify({ step: 'search', message: 'Starting execution…', current: 0, total: 0 }),
     },
   })
-  // clear previous artifacts so re-runs are clean
-  await db.dataItem.deleteMany({ where: { taskId: id } })
-  await db.dataSource.deleteMany({ where: { taskId: id } })
 
-  markRunning(id)
-  // fire and forget — process stays alive in `next dev`
+  // The clear-and-rebuild is transactional: a crash can no longer leave a task
+  // with its previous dataset deleted and nothing to show for it.
+  await db.$transaction([
+    db.dataItem.deleteMany({ where: { taskId: id } }),
+    db.dataSource.deleteMany({ where: { taskId: id } }),
+  ])
+
+  await logActivity({ type: 'task_run', taskId: id, message: `Started collection for "${task.title}"`, meta: { title: task.title } })
+
   executeWorkflow(id)
     .catch((e) => console.error('workflow failed', id, e))
-    .finally(() => markDone(id))
+    .finally(() => releaseRun(id, token))
 
-  await logActivity({
-    type: 'task_run',
-    taskId: id,
-    message: `Started collection for "${task.title}"`,
-    meta: { title: task.title },
-  })
-
-  return NextResponse.json({ ok: true, status: 'running' })
-}
+  return NextResponse.json({ ok: true, status: 'started' })
+})
