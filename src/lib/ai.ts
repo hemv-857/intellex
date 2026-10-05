@@ -199,7 +199,9 @@ function buildInitialWorkflow(): WorkflowStep[] {
   ]
 }
 
-function buildExtractionPrompt(
+// Exported for tests: the prompt's injection defences are load-bearing and
+// must not be silently editable without coverage.
+export function buildExtractionPrompt(
   plan: WorkflowPlan,
   pageTitle: string,
   pageUrl: string,

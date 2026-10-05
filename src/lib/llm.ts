@@ -6,11 +6,16 @@
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
-// Verified live against GET https://openrouter.ai/api/v1/models on 2026-10-02:
-// 1M context, $0.30/M in, $2.50/M out, tool-capable. Override per-deployment.
-const DEFAULT_MODEL = 'google/gemini-2.5-flash'
+// Default is a `:free` route so the app runs without a paid OpenRouter plan.
+// Verified on 2026-10-02; free slugs rotate, so this is overridable per
+// deployment via OPENROUTER_MODEL.
+const DEFAULT_MODEL = 'inclusionai/ling-3.0-flash-sante:free'
 
 const REQUEST_TIMEOUT_MS = 60_000
+
+// Ceiling for one completion. Extraction sends up to 6k chars of page content,
+// so a small cap would truncate mid-record and return invalid JSON.
+const MAX_TOKENS = 8_000
 
 export interface ChatMessage {
   role: 'system' | 'assistant' | 'user'
@@ -63,6 +68,13 @@ export async function chat(messages: ChatMessage[]): Promise<ChatResult> {
       model: chatModel(),
       messages,
       temperature: 0,
+      max_tokens: MAX_TOKENS,
+      // Reasoning models otherwise spend the token budget on deliberation and
+      // can return content: null with finish_reason "length", which reaches
+      // safeJsonParse as an empty string and silently degrades to the fallback
+      // plan. Confirmed on the default free route: 80 of 83 completion tokens
+      // were reasoning, leaving no JSON.
+      reasoning: { enabled: false },
     }),
   })
 
@@ -80,14 +92,24 @@ export async function chat(messages: ChatMessage[]): Promise<ChatResult> {
   }
 
   const body = JSON.parse(raw) as {
-    choices?: { message?: { content?: unknown } }[]
+    choices?: { message?: { content?: unknown }; finish_reason?: string }[]
     usage?: { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number }
   }
 
-  const text = contentToText(body.choices?.[0]?.message?.content)
+  const choice = body.choices?.[0]
+  const text = contentToText(choice?.message?.content)
   const usage = body.usage
   const tokens =
     usage?.total_tokens ?? (usage?.prompt_tokens ?? 0) + (usage?.completion_tokens ?? 0)
+
+  // An empty completion is a failure, not an empty answer. Failing loudly here
+  // stops it from reaching safeJsonParse, whose fallback would quietly produce
+  // a generic 4-field plan or an empty record set that looks like a real result.
+  if (!text.trim()) {
+    throw new Error(
+      `OpenRouter returned no content (finish_reason: ${choice?.finish_reason ?? 'unknown'})`,
+    )
+  }
 
   return { text, tokens }
 }

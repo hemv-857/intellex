@@ -41,6 +41,30 @@ describe('llm: chat', () => {
     expect(chat([{ role: 'user', content: 'hi' }])).rejects.toThrow(/OPENROUTER_API_KEY is not set/)
   })
 
+  it('disables reasoning so the token budget is not spent on deliberation', async () => {
+    process.env.OPENROUTER_API_KEY = 'sk-or-test'
+    const calls = mockFetch([{ body: { choices: [{ message: { content: '{}' } }] } }])
+    await chat([{ role: 'user', content: 'hi' }])
+    const body = JSON.parse(String(calls[0].init.body))
+    expect(body.reasoning).toEqual({ enabled: false })
+    expect(body.max_tokens).toBeGreaterThanOrEqual(8000)
+  })
+
+  // Confirmed live on the default free route: 80 of 83 completion tokens were
+  // reasoning, leaving content: null and an empty plan after safeJsonParse.
+  it('throws rather than returning empty text that would become a fallback plan', async () => {
+    process.env.OPENROUTER_API_KEY = 'sk-or-test'
+    mockFetch([
+      {
+        body: {
+          choices: [{ message: { content: null }, finish_reason: 'length' }],
+          usage: { total_tokens: 50 },
+        },
+      },
+    ])
+    expect(chat([{ role: 'user', content: 'hi' }])).rejects.toThrow(/no content.*length/i)
+  })
+
   it('returns text and real usage from an OpenAI-shaped body', async () => {
     process.env.OPENROUTER_API_KEY = 'sk-or-test'
     mockFetch([
@@ -80,10 +104,13 @@ describe('llm: chat', () => {
     expect(chat([{ role: 'user', content: 'hi' }])).rejects.toThrow(/No auth credentials found/)
   })
 
-  it('defaults the model and honours an override', () => {
+  it('defaults to a free route so no paid plan is required', () => {
+    expect(chatModel()).toMatch(/:free$/)
+  })
+
+  it('honours an override', () => {
+    process.env.OPENROUTER_MODEL = 'google/gemini-2.5-flash'
     expect(chatModel()).toBe('google/gemini-2.5-flash')
-    process.env.OPENROUTER_MODEL = 'qwen/qwen3-8b'
-    expect(chatModel()).toBe('qwen/qwen3-8b')
   })
 
   it('sends the key as a bearer token', async () => {
