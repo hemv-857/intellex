@@ -10,8 +10,8 @@
 # Before the first deploy, set the secrets marked `sync: false`:
 #   APP_TOKEN       single-tenant access token
 #   SCHEDULER_KEY   enables scheduled collections
-#   ZAI_API_KEY     LLM credential
-#   ZAI_BASE_URL    LLM endpoint
+#   OPENROUTER_API_KEY  chat completions (planning, extraction, expansion)
+#   TAVILY_API_KEY      web search + page reading
 # Generate with:
 #   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
@@ -50,11 +50,12 @@ services:
       - key: SCHEDULER_KEY
         sync: false
 
-      # The Z.AI SDK only reads a credentials FILE. instrumentation.ts writes
-      # .z-ai-config from these at boot; without them, collection runs fail.
-      - key: ZAI_API_KEY
+      # Provider credentials, read straight from the environment.
+      # TAVILY_API_KEY is the one that matters most: without it the engine
+      # cannot find or read any source, so collection runs find nothing.
+      - key: OPENROUTER_API_KEY
         sync: false
-      - key: ZAI_BASE_URL
+      - key: TAVILY_API_KEY
         sync: false
 
       # Scheduling runs inside this long-lived process.

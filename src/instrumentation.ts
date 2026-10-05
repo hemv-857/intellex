@@ -1,11 +1,13 @@
 // Boot-time setup, run once per server process.
 //
-// Three jobs:
-//   1. Materialise the Z.AI credentials file the SDK insists on reading, so the
-//      app works where there is no home directory and no pre-existing config.
-//   2. Start the in-process scheduler (only when SCHEDULER_KEY is set).
-//   3. Install a graceful-shutdown hook so a deploy drains rather than cutting
+// Two jobs:
+//   1. Start the in-process scheduler (only when SCHEDULER_KEY is set).
+//   2. Install a graceful-shutdown hook so a deploy drains rather than cutting
 //      a collection run off mid-write.
+//
+// The old third job — writing a Z.AI credentials file — is gone. Credentials now
+// go straight from the environment to the provider clients, so there is no file
+// to materialise.
 
 const TICK_INTERVAL_MS = 60_000
 const PURGE_INTERVAL_MS = 6 * 60 * 60 * 1000 // every 6 hours
@@ -13,17 +15,21 @@ const PURGE_INTERVAL_MS = 6 * 60 * 60 * 1000 // every 6 hours
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
 
-  // 1) Credentials
-  try {
-    const { ensureZaiConfig } = await import('@/lib/zai-config')
-    const result = ensureZaiConfig()
-    if (result.created) {
-      console.log('[boot] wrote .z-ai-config from ZAI_API_KEY/ZAI_BASE_URL')
-    } else if (result.reason && process.env.NODE_ENV === 'production') {
-      console.warn(`[boot] LLM not configured: ${result.reason}. Collection runs will fail.`)
+  // 1) Warn early if the providers are not configured. Collections fail
+  // per-request with a clear message either way; this just makes a silent
+  // misconfiguration visible in the deploy logs at boot instead.
+  if (process.env.NODE_ENV === 'production') {
+    const missing = [
+      ['OPENROUTER_API_KEY', 'chat'],
+      ['TAVILY_API_KEY', 'web search'],
+    ]
+      .filter(([key]) => !process.env[key])
+      .map(([, what]) => what)
+    if (missing.length) {
+      console.warn(
+        `[boot] provider not configured: missing key for ${missing.join(', ')}. Those flows will fail.`,
+      )
     }
-  } catch (e) {
-    console.error('[boot] could not prepare LLM config', e)
   }
 
   // 2) Scheduler

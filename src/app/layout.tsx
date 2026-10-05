@@ -29,7 +29,9 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Intellex" }],
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    // Local asset, not a hotlink: the previous icon was served from the removed
+    // provider's CDN, which meant every page load called out to their infra.
+    icon: "/logo.svg",
   },
   openGraph: {
     title: "Intellex — AI Data Intelligence Platform",

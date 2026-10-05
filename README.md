@@ -12,7 +12,7 @@ Prompt-based AI data intelligence platform. Describe what you need in plain lang
 
 ## Stack
 
-Next.js 16 (App Router) · React 19 · TypeScript · Tailwind v4 · shadcn/ui · Prisma + SQLite · `z-ai-web-dev-sdk` (`web_search`, `page_reader`) · Recharts · xlsx · zod · Bun
+Next.js 16 (App Router) · React 19 · TypeScript · Tailwind v4 · shadcn/ui · Prisma + SQLite · OpenRouter (chat) + Tavily (`/search`, `/extract`) · Recharts · xlsx · zod · Bun
 
 ## Quickstart
 
@@ -58,7 +58,8 @@ Then set the four secrets it marks `sync: false`:
 | --- | --- |
 | `APP_TOKEN` | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 | `SCHEDULER_KEY` | same |
-| `ZAI_API_KEY` / `ZAI_BASE_URL` | from your Z.AI account |
+| `OPENROUTER_API_KEY` | from [openrouter.ai](https://openrouter.ai) — chat |
+| `TAVILY_API_KEY` | from [tavily.com](https://tavily.com) — search + page reading |
 
 The blueprint points `DATABASE_URL` at `file:/var/data/intellex/custom.db` on a 1 GB disk, so **the database survives deploys**. `scripts/start-render.sh` creates that directory (SQLite will not), applies migrations, and starts the standalone server on `PORT`.
 
@@ -67,12 +68,12 @@ The blueprint points `DATABASE_URL` at `file:/var/data/intellex/custom.db` on a 
 ```json
 { "status": "ok",
   "checks": { "database": "ok", "schema": "ok", "searchIndex": "ok", "auth": "ok" },
-  "scheduler": "enabled", "inProcessScheduler": true, "llmConfigured": true }
+  "scheduler": "enabled", "inProcessScheduler": true,
+  "llmConfigured": true, "searchConfigured": true }
 ```
 
-Two things the platform cannot do for you:
+One thing the platform cannot do for you:
 
-- **The LLM credential is a file.** The Z.AI SDK only reads `.z-ai-config` from the working directory, home directory, or `/etc` — it has no environment-variable support. `src/lib/zai-config.ts` writes it at boot from `ZAI_API_KEY`/`ZAI_BASE_URL` with mode `0600`, into both the working directory and `$HOME` (the standalone working directory is `.next/standalone`, which every build wipes). Without those env vars, collection runs fail with a config error.
 - **Use the `starter` plan, not `free`.** Free instances sleep after inactivity, which interrupts a collection run mid-write. `SIGTERM` triggers a 10-second drain so a deploy does not cut a write off.
 
 ### Vercel

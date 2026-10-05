@@ -66,7 +66,10 @@ export async function GET(req: Request) {
       databasePath: databasePath ? databasePath.replace(/^.*\//, '…/') : null,
       scheduler: process.env.SCHEDULER_KEY ? 'enabled' : 'disabled',
       inProcessScheduler: process.env.IN_PROCESS_SCHEDULER !== '0' && !!process.env.SCHEDULER_KEY,
-      llmConfigured: !!(process.env.ZAI_API_KEY && process.env.ZAI_BASE_URL),
+      // Presence only — never the value. Chat and search have independent keys
+      // and can be configured separately, so report them separately.
+      llmConfigured: !!process.env.OPENROUTER_API_KEY,
+      searchConfigured: !!process.env.TAVILY_API_KEY,
       version: process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? null,
     },
     { status: healthy ? 200 : 503 },
