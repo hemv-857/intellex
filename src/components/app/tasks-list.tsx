@@ -253,6 +253,7 @@ export function TasksList({ onOpenTask, onNew }: TasksListProps) {
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            aria-label="Search tasks by title, prompt or objective"
             placeholder="Search tasks by title, prompt, or objective…"
             className="pl-9 bg-card"
           />

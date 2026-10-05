@@ -9,7 +9,6 @@
 
 const TICK_INTERVAL_MS = 60_000
 const PURGE_INTERVAL_MS = 6 * 60 * 60 * 1000 // every 6 hours
-const SHUTDOWN_GRACE_MS = 10_000
 
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
@@ -67,18 +66,8 @@ export async function register() {
     console.log('[boot] in-process scheduler started (60s interval)')
   }
 
-  // 3) Graceful shutdown
-  if (!g.__intellexShutdownHandler) {
-    g.__intellexShutdownHandler = true
-    const shutdown = (signal: string) => {
-      if (g.__intellexShutdown) return
-      g.__intellexShutdown = true
-      console.log(`[shutdown] ${signal} received — draining for ${SHUTDOWN_GRACE_MS}ms`)
-      // Stop firing new work; let anything already queued finish writing.
-      if (g.__intellexScheduler) clearInterval(g.__intellexScheduler)
-      setTimeout(() => process.exit(0), SHUTDOWN_GRACE_MS).unref?.()
-    }
-    process.on('SIGTERM', () => shutdown('SIGTERM'))
-    process.on('SIGINT', () => shutdown('SIGINT'))
-  }
+  // 3) Graceful shutdown. Imported dynamically so process.exit stays out of the
+  // edge bundle Next also builds for instrumentation.
+  const { installShutdownHandler } = await import('@/lib/shutdown')
+  installShutdownHandler(g)
 }

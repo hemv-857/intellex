@@ -261,7 +261,7 @@ export function TaskDetailView({ taskId, onBack, onDelete }: TaskDetailProps) {
           </DropdownMenu>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" aria-label="More task actions" title="More actions">
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
@@ -287,7 +287,7 @@ export function TaskDetailView({ taskId, onBack, onDelete }: TaskDetailProps) {
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" className="text-muted-foreground hover:text-red-500">
+              <Button variant="outline" size="sm" className="text-muted-foreground hover:text-red-500" aria-label="Delete task" title="Delete task">
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </AlertDialogTrigger>
@@ -512,7 +512,7 @@ function DataTab({ items, fields, sources, confidenceFilter, onClearConfidenceFi
         <div className="flex items-center gap-2 flex-1 min-w-48">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search records…" className="pl-9 h-9 bg-card" />
+            <Input aria-label="Search this task’s records" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search records…" className="pl-9 h-9 bg-card" />
           </div>
           <Button
             size="sm"

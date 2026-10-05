@@ -119,7 +119,7 @@ export function SourcesView({ onOpenTask }: SourcesViewProps) {
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by URL, title, host…" className="pl-9 bg-card" />
+          <Input aria-label="Search sources by URL, title or host" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by URL, title, host…" className="pl-9 bg-card" />
         </div>
         <Select value={status} onValueChange={(v) => setStatus(v as any)}>
           <SelectTrigger className="w-full sm:w-40 bg-card">
