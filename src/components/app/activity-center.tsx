@@ -25,9 +25,14 @@ import {
   Download,
   FileText,
   Bell,
+  Upload,
+  Pencil,
+  ShieldCheck,
+  RefreshCw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { api, timeAgo } from './shared'
+import { ScheduleAlerts } from './schedule-alerts'
 import { type Section } from './sidebar'
 import type { LucideIcon } from 'lucide-react'
 
@@ -58,6 +63,13 @@ const TYPE_META: Record<string, { icon: LucideIcon; tint: string }> = {
   task_scheduled: { icon: CalendarClock, tint: 'text-indigo-500 bg-indigo-500/10' },
   template_saved: { icon: FileText, tint: 'text-violet-500 bg-violet-500/10' },
   export: { icon: Download, tint: 'text-emerald-500 bg-emerald-500/10' },
+  schedule_run: { icon: CalendarClock, tint: 'text-indigo-500 bg-indigo-500/10' },
+  scheduler_tick: { icon: RefreshCw, tint: 'text-muted-foreground bg-muted' },
+  backup_restored: { icon: Upload, tint: 'text-emerald-500 bg-emerald-500/10' },
+  backup_failed: { icon: AlertCircle, tint: 'text-red-500 bg-red-500/10' },
+  item_edited: { icon: Pencil, tint: 'text-sky-500 bg-sky-500/10' },
+  item_validity: { icon: ShieldCheck, tint: 'text-emerald-500 bg-emerald-500/10' },
+  item_deleted: { icon: Trash2, tint: 'text-red-500 bg-red-500/10' },
 }
 
 export function ActivityCenter({ open, onOpenChange, onOpenTask }: ActivityCenterProps) {
@@ -83,7 +95,8 @@ export function ActivityCenter({ open, onOpenChange, onOpenTask }: ActivityCente
           </SheetTitle>
           <SheetDescription>Recent actions across your workspace</SheetDescription>
         </SheetHeader>
-        <ScrollArea className="h-[calc(100vh-4rem)] scrollbar-thin">
+        <ScheduleAlerts onOpenTask={onOpenTask} />
+        <ScrollArea className="h-[calc(100vh-9rem)] scrollbar-thin">
           {loading ? (
             <div className="p-3 space-y-2">
               {Array.from({ length: 6 }).map((_, i) => (

@@ -100,8 +100,62 @@ export async function runSchedulerTick(): Promise<{ processed: number; taskIds: 
 
       // 4) Fire-and-forget the workflow
       markRunning(d.id)
+      const startedAt = nowIso
       executeWorkflow(d.id)
-        .catch((e) => console.error('scheduled workflow failed', d.id, e))
+        .then(async () => {
+          // Re-read the outcome rather than assuming success: executeWorkflow
+          // catches its own errors and marks the task failed, so a resolved
+          // promise does not mean the run worked.
+          const after = await db.task.findUnique({
+            where: { id: d.id },
+            select: { status: true, error: true, stats: true },
+          })
+          const failed = after?.status === 'failed'
+          const stats = (() => {
+            try {
+              const v = JSON.parse(after?.stats || '{}')
+              return v && typeof v === 'object' ? (v as Record<string, unknown>) : {}
+            } catch {
+              return {}
+            }
+          })()
+
+          await db.activityLog.create({
+            data: {
+              type: 'schedule_run',
+              taskId: d.id,
+              message: failed
+                ? `Scheduled run failed: ${(after?.error || 'unknown error').slice(0, 200)}`
+                : `Scheduled run completed: ${stats.items ?? 0} record(s) from ${stats.sources ?? 0} source(s)`,
+              meta: JSON.stringify({
+                status: failed ? 'failed' : 'completed',
+                error: failed ? (after?.error ?? null) : null,
+                items: typeof stats.items === 'number' ? stats.items : null,
+                sources: typeof stats.sources === 'number' ? stats.sources : null,
+                startedAt,
+                durationMs: Date.now() - now,
+              }),
+            },
+          })
+        })
+        .catch(async (e) => {
+          // Only reached if executeWorkflow itself rejects, which it normally
+          // does not — recorded anyway so a thrown bug is never silent.
+          const msg = (e as Error)?.message || 'Scheduled workflow threw'
+          await db.activityLog.create({
+            data: {
+              type: 'schedule_run',
+              taskId: d.id,
+              message: `Scheduled run threw: ${msg.slice(0, 200)}`,
+              meta: JSON.stringify({
+                status: 'failed',
+                error: msg.slice(0, 500),
+                startedAt,
+                durationMs: Date.now() - now,
+              }),
+            },
+          })
+        })
         .finally(() => releaseRun(d.id, token))
 
       processedIds.push(d.id)
