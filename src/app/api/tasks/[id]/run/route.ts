@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { logActivity, rateLimit } from '@/lib/api-utils'
+import { logActivity, rateLimit, schemas, validateBody } from '@/lib/api-utils'
 import { claimRun, releaseRun, isRunActive } from '@/lib/run-lease'
 import { executeWorkflow, isRunning } from '@/lib/ai'
 import { randomUUID } from 'node:crypto'
@@ -12,6 +12,12 @@ import { randomUUID } from 'node:crypto'
 // expires rather than being stuck 'running' forever.
 export const POST = rateLimit({ max: 20, key: 'task-run' })(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params
+
+  const raw = await req.json().catch(() => ({} as any))
+  const parsed = validateBody(schemas.runTask, raw)
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
+  const mode = parsed.data?.mode ?? 'replace'
+
   const task = await db.task.findUnique({ where: { id }, select: { id: true, title: true } })
   if (!task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
 
@@ -34,18 +40,30 @@ export const POST = rateLimit({ max: 20, key: 'task-run' })(async (req: NextRequ
     },
   })
 
-  // The clear-and-rebuild is transactional: a crash can no longer leave a task
-  // with its previous dataset deleted and nothing to show for it.
-  await db.$transaction([
-    db.dataItem.deleteMany({ where: { taskId: id } }),
-    db.dataSource.deleteMany({ where: { taskId: id } }),
-  ])
+  // Replace mode wipes first, transactionally: a crash can no longer leave a
+  // task with its previous dataset deleted and nothing to show for it.
+  // Incremental mode keeps the dataset and lets the engine skip sources it has
+  // already read, so a repeat run only pays for what is genuinely new.
+  if (mode === 'replace') {
+    await db.$transaction([
+      db.dataItem.deleteMany({ where: { taskId: id } }),
+      db.dataSource.deleteMany({ where: { taskId: id } }),
+    ])
+  }
 
-  await logActivity({ type: 'task_run', taskId: id, message: `Started collection for "${task.title}"`, meta: { title: task.title } })
+  await logActivity({
+    type: 'task_run',
+    taskId: id,
+    message:
+      mode === 'incremental'
+        ? `Started incremental collection for "${task.title}"`
+        : `Started collection for "${task.title}"`,
+    meta: { title: task.title, mode },
+  })
 
-  executeWorkflow(id)
+  executeWorkflow(id, mode)
     .catch((e) => console.error('workflow failed', id, e))
     .finally(() => releaseRun(id, token))
 
-  return NextResponse.json({ ok: true, status: 'started' })
+  return NextResponse.json({ ok: true, status: 'started', mode })
 })

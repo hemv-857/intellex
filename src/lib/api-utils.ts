@@ -83,7 +83,13 @@ export const schemas = {
   createTask: z.object({
     prompt: z.string().min(10, 'Prompt must be at least 10 characters').max(2000, 'Prompt too long (max 2000 chars)'),
   }),
-  runTask: z.object({}).optional(),
+  runTask: z
+    .object({
+      // 'incremental' keeps existing records and only pays for sources it has
+      // not read before. 'replace' is the historical clear-and-rebuild.
+      mode: z.enum(['replace', 'incremental']).optional().default('replace'),
+    })
+    .optional(),
   // Exactly one action per PATCH. Previously body.purge / body.restore / body.pinned
   // were trusted by truthiness on an untyped object, so any truthy value — including
   // "false" as a string or an array — could trigger a permanent delete.

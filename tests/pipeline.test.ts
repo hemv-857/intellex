@@ -232,6 +232,32 @@ describe('searchWeb + engine contract', () => {
   })
 })
 
+describe('incremental collection', () => {
+  it('accepts an explicit mode and rejects an unknown one', async () => {
+    const { schemas, validateBody } = await import('../src/lib/api-utils')
+
+    expect(validateBody(schemas.runTask, { mode: 'incremental' })).toEqual({
+      ok: true,
+      data: { mode: 'incremental' },
+    })
+    // An empty body still works, and must default to the historical behaviour.
+    expect(validateBody(schemas.runTask, {})).toEqual({ ok: true, data: { mode: 'replace' } })
+
+    const bad = validateBody(schemas.runTask, { mode: 'destroy' })
+    expect(bad.ok).toBe(false)
+  })
+
+  it('rejects a mode that is not an exact enum member', async () => {
+    const { schemas, validateBody } = await import('../src/lib/api-utils')
+    // Truthiness on an untyped body is how the old taskPatch bug shipped. The
+    // mode must be one of two exact strings, not merely present.
+    for (const bad of [{ mode: 'INCREMENTAL' }, { mode: true }, { mode: 1 }, { mode: 'replace ' }]) {
+      expect(validateBody(schemas.runTask, bad).ok).toBe(false)
+    }
+    expect(validateBody(schemas.runTask, { mode: 'replace' }).ok).toBe(true)
+  })
+})
+
 describe('withRetry', () => {
   it('retries a failing call and returns the eventual success', async () => {
     const { withRetry } = await import('../src/lib/ai')

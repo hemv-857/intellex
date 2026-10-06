@@ -44,6 +44,8 @@ export interface TaskStats {
   valid: number
   duplicates: number
   tokens: number
+  /** Set when the last run was incremental, so `items` counts the whole set. */
+  incremental?: boolean
   /**
    * True when `tokens` is real per-call API usage. False/absent on collections
    * from before the fix, whose `tokens` summed page_reader's reported figure —
@@ -297,7 +299,9 @@ export async function extractFromSource(
   return { records, tokens: aiTokens, title, pageReadOk }
 }
 
-export async function executeWorkflow(taskId: string): Promise<void> {
+export type RunMode = 'replace' | 'incremental'
+
+export async function executeWorkflow(taskId: string, mode: RunMode = 'replace'): Promise<void> {
   const task = await db.task.findUnique({ where: { id: taskId } })
   if (!task) return
 
@@ -379,9 +383,53 @@ export async function executeWorkflow(taskId: string): Promise<void> {
       if (collectedSources.length >= MAX_TOTAL_SOURCES) break
     }
 
-    // persist source rows
-    for (const s of collectedSources) {
-      await db.dataSource.create({
+    // Incremental runs skip sources already read successfully. Re-reading a page
+    // costs a Tavily credit and an extraction call to produce records that are
+    // already stored, so a repeat run only pays for what is genuinely new.
+    //
+    // The skip is keyed on URL, not fetch status. (taskId, url) is unique, so a
+    // source that failed last time still occupies its row: filtering by
+    // 'fetched' alone would try to insert it again and abort the whole run on
+    // the unique constraint. Sources that need a retry are updated in place.
+    const priorSources = new Map<string, { id: string; fetchStatus: string }>()
+    if (mode === 'incremental') {
+      const prior = await db.dataSource.findMany({
+        where: { taskId },
+        select: { id: true, url: true, fetchStatus: true },
+      })
+      for (const p of prior) priorSources.set(p.url, { id: p.id, fetchStatus: p.fetchStatus })
+    }
+    const sourcesToRead = collectedSources.filter(
+      (s) => priorSources.get(s.url)?.fetchStatus !== 'fetched',
+    )
+    const sourcesSkipped = collectedSources.length - sourcesToRead.length
+
+    // Ids of the sources this run will read, needed because the extract loop selects
+    // by id on a repeat run.
+    const readSourceIds: string[] = []
+
+    // Persist source rows. On a repeat run a source that previously failed is
+    // updated rather than created, which both clears the stale 'failed' status
+    // and avoids the unique violation.
+    for (const s of sourcesToRead) {
+      const existing = mode === 'incremental' ? priorSources.get(s.url) : undefined
+      if (existing) {
+        await db.dataSource.update({
+          where: { id: existing.id },
+          data: {
+            title: s.title,
+            snippet: s.snippet,
+            hostName: s.hostName,
+            favicon: s.favicon,
+            publishedTime: s.publishedTime,
+            rank: s.rank,
+            fetchStatus: 'pending',
+          },
+        })
+        readSourceIds.push(existing.id)
+        continue
+      }
+      const row = await db.dataSource.create({
         data: {
           taskId,
           url: s.url,
@@ -394,15 +442,32 @@ export async function executeWorkflow(taskId: string): Promise<void> {
           fetchStatus: 'pending',
         },
       })
+      readSourceIds.push(row.id)
     }
-    stats.sources = collectedSources.length
-    setStep('search', 'completed', `${collectedSources.length} candidate sources from ${plan.searchQueries.length} queries`)
+    // The dataset grows rather than resets, so the total reflects what is stored
+    // after this run, not just what this run found.
+    stats.sources = await db.dataSource.count({ where: { taskId } })
+    setStep(
+      'search',
+      'completed',
+      `${collectedSources.length} candidate sources from ${plan.searchQueries.length} queries` +
+        (sourcesSkipped ? `, ${sourcesSkipped} already collected` : ''),
+    )
     await save('running', { step: 'search', message: 'Sources gathered', current: plan.searchQueries.length, total: plan.searchQueries.length })
 
     // ---------- Step: fetch + extract ----------
     setStep('fetch', 'running')
     setStep('extract', 'running')
-    const sourceRows = await db.dataSource.findMany({ where: { taskId }, orderBy: { rank: 'asc' } })
+    // Only the sources this run intends to read. On a repeat run the already-fetched
+    // ones are excluded here too — skipping them at insert time is not enough,
+    // because the extract loop below would still re-read and re-extract them.
+    const sourceRows = await db.dataSource.findMany({
+      where:
+        mode === 'incremental'
+          ? { taskId, id: { in: sourcesToRead.length ? readSourceIds : [] } }
+          : { taskId },
+      orderBy: { rank: 'asc' },
+    })
 
     const allRecords: { record: ExtractedRecord; sourceId: string; title: string }[] = []
 
@@ -442,7 +507,13 @@ export async function executeWorkflow(taskId: string): Promise<void> {
       }
     }
     setStep('fetch', 'completed', `${sourceRows.length} sources processed`)
-    setStep('extract', 'completed', `${allRecords.length} raw records extracted`)
+    setStep(
+      'extract',
+      'completed',
+      mode === 'incremental'
+        ? `${allRecords.length} new records from ${sourceRows.length} unread source(s)`
+        : `${allRecords.length} raw records extracted`,
+    )
     await save('running', { step: 'extract', message: 'Extraction complete', current: sourceRows.length, total: sourceRows.length })
 
     // ---------- Step: clean, validate, dedupe ----------
@@ -453,6 +524,18 @@ export async function executeWorkflow(taskId: string): Promise<void> {
     let validCount = 0
     let dupCount = 0
     let written = 0
+
+    // In incremental mode, keys already stored count as seen so a record that
+    // reappears in a new source is not rewritten — the stored copy wins.
+    if (mode === 'incremental') {
+      const prior = await db.dataItem.findMany({
+        where: { taskId, dedupeKey: { not: null } },
+        select: { dedupeKey: true },
+      })
+      for (const p of prior) if (p.dedupeKey) seenKeys.add(p.dedupeKey)
+      const priorValid = await db.dataItem.count({ where: { taskId, valid: true } })
+      validCount = priorValid
+    }
 
     for (let i = 0; i < allRecords.length; i++) {
       const { record, sourceId, title } = allRecords[i]
@@ -513,10 +596,24 @@ export async function executeWorkflow(taskId: string): Promise<void> {
       written++
     }
 
-    stats.items = written
-    stats.valid = validCount
-    stats.duplicates = dupCount
-    setStep('clean', 'completed', `${written} kept, ${dupCount} duplicates removed, ${validCount} valid`)
+    // In incremental mode these describe the dataset, not this run: `written` counts
+    // only what was new, so reporting it as `items` would make a repeat run look
+    // like it lost everything.
+    if (mode === 'incremental') {
+      stats.items = await db.dataItem.count({ where: { taskId } })
+      stats.valid = await db.dataItem.count({ where: { taskId, valid: true } })
+      stats.incremental = true
+      setStep(
+        'clean',
+        'completed',
+        `${written} added, ${dupCount} duplicates removed, ${stats.items} total`,
+      )
+    } else {
+      stats.items = written
+      stats.valid = validCount
+      stats.duplicates = dupCount
+      setStep('clean', 'completed', `${written} kept, ${dupCount} duplicates removed, ${validCount} valid`)
+    }
     await save('running', { step: 'clean', message: 'Cleaning complete', current: allRecords.length, total: allRecords.length })
 
     // ---------- Finalize ----------
