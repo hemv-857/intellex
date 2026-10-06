@@ -68,3 +68,6 @@ prompt
 server.log
 # Skills directory
 /skills/
+# Render CLI --secret-file staging dir. Holds live credentials in plaintext;
+# never commit. Secrets are set in the Render dashboard, not the CLI.
+render-secrets/
