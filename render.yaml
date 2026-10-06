@@ -2,10 +2,20 @@
 #
 # Deploy with:  render blueprint launch      (or connect the repo in the dashboard)
 #
-# Shape: one long-lived Node web service with a persistent disk. That is
-# deliberate — collection runs are fire-and-forget after the response returns, so
-# they need a process that stays alive. A serverless platform would freeze them
-# mid-write, and SQLite needs a real filesystem.
+# Shape: one Node web service, because collection runs are fire-and-forget after
+# the response returns and need a process that stays alive. A serverless platform
+# would freeze them mid-write, and SQLite needs a real filesystem. That is also
+# why this cannot run on Vercel — vercel.json is only a redirect to here.
+#
+# This blueprint targets the FREE plan so it deploys without a card. The cost of
+# that is real and worth stating plainly:
+#   - No persistent disk. The database below lives in the build directory and is
+#     WIPED ON EVERY DEPLOY. Do not put anything in it you cannot lose.
+#   - The instance sleeps after ~15 minutes idle, and a collection run in flight
+#     when it sleeps will be interrupted.
+# For either problem, upgrade to `starter` and re-add the `disk:` block at the
+# bottom of this file (it is present but commented out), then point
+# DATABASE_URL back at /var/data/intellex.
 #
 # Before the first deploy, set the secrets marked `sync: false`:
 #   APP_TOKEN       single-tenant access token
@@ -19,7 +29,7 @@ services:
   - type: web
     name: intellex
     runtime: node
-    plan: starter # 'free' sleeps after inactivity, which interrupts collection runs
+    plan: free # 'starter' needs a card on the account; see the note above
     region: oregon
     branch: main
     autoDeployTrigger: commit
@@ -35,10 +45,11 @@ services:
       - key: NODE_ENV
         value: production
 
-      # The persistent disk. This path is what makes the data survive deploys —
-      # never point it at the ephemeral filesystem.
+      # On the free plan there is no persistent disk, so the database sits in
+      # the project directory and is reset on every deploy. With a disk mounted
+      # (starter plan) change this to file:/var/data/intellex/custom.db.
       - key: DATABASE_URL
-        value: file:/var/data/intellex/custom.db
+        value: file:/opt/render/project/src/db/custom.db
 
       # Public origin, used to build shareable /share/<token> links.
       - key: NEXT_PUBLIC_APP_URL
@@ -62,9 +73,9 @@ services:
       - key: IN_PROCESS_SCHEDULER
         value: "1"
 
-    # The SQLite database and its write-ahead log live here, so they persist
-    # across deploys.
-    disk:
-      name: intellex-data
-      mountPath: /var/data/intellex
-      sizeGB: 1
+    # Uncomment on the `starter` plan to make the database survive deploys.
+    # Requires a payment method on the account.
+    # disk:
+    #   name: intellex-data
+    #   mountPath: /var/data/intellex
+    #   sizeGB: 1
