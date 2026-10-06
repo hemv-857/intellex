@@ -46,7 +46,7 @@ Other scripts: `bun run build`, `bun run start`, `bun run lint`, `bun test`, `bu
 
 ### Render (primary — where this app belongs)
 
-One long-lived Node service with a persistent disk. `render.yaml` is a blueprint, so this is the whole deploy:
+One Node service. `render.yaml` is a blueprint, so this is the whole deploy:
 
 ```bash
 render blueprint launch          # or connect the repo in the dashboard
@@ -61,7 +61,12 @@ Then set the four secrets it marks `sync: false`:
 | `OPENROUTER_API_KEY` | from [openrouter.ai](https://openrouter.ai) — chat |
 | `TAVILY_API_KEY` | from [tavily.com](https://tavily.com) — search + page reading |
 
-The blueprint points `DATABASE_URL` at `file:/var/data/intellex/custom.db` on a 1 GB disk, so **the database survives deploys**. `scripts/start-render.sh` creates that directory (SQLite will not), applies migrations, and starts the standalone server on `PORT`.
+The blueprint targets the **free** plan, so it deploys without a payment method. `scripts/start-render.sh` creates the database directory (SQLite will not), applies migrations, and starts the standalone server on `PORT`.
+
+Two things to know before you rely on it:
+
+- **The database is wiped on every deploy.** The free plan has no persistent disk, so `DATABASE_URL` points at `file:/opt/render/project/src/db/custom.db` inside the build. For data that must survive a deploy, upgrade to `starter` (needs a card), uncomment the `disk:` block at the bottom of `render.yaml`, and point `DATABASE_URL` back at `file:/var/data/intellex/custom.db`.
+- **Secrets must be entered in the dashboard**, not the CLI. `render services create` accepts `--env-var` and `--secret-file` but silently applies neither — verified with a probe service whose boot log reported the keys missing. Set the four `sync: false` secrets after the first launch.
 
 `/api/health` is the liveness probe and checks the things that actually break a deploy — database reachable, migrations applied, search index consistent, auth configured:
 
@@ -74,7 +79,7 @@ The blueprint points `DATABASE_URL` at `file:/var/data/intellex/custom.db` on a 
 
 One thing the platform cannot do for you:
 
-- **Use the `starter` plan, not `free`.** Free instances sleep after inactivity, which interrupts a collection run mid-write. `SIGTERM` triggers a 10-second drain so a deploy does not cut a write off.
+- **Free instances sleep after ~15 minutes idle**, which can interrupt a collection run in flight, and sleep also means the first request after idle waits for a cold start. `starter` avoids both. `SIGTERM` triggers a 10-second drain so a deploy does not cut a write off.
 
 ### Vercel
 
@@ -84,6 +89,8 @@ One thing the platform cannot do for you:
 - collection runs are fire-and-forget after the response returns, so a frozen function would abandon a run partway through writing.
 
 Point a Vercel domain at it if you want Vercel-managed TLS and CDN in front; the app itself stays on Render. If you later need the app to genuinely run on Vercel, that means moving to Postgres and moving collection execution to a queue — a real change, not a config flag.
+
+Note that `vercel.json` currently redirects to `https://intellex.onrender.com`, a hostname that does not exist. Update the destination to the slug Render assigns (it is visible on the service page and usually `<name>-<suffix>.onrender.com`) or the redirect lands visitors on a dead host.
 
 ### Other Node hosts (Railway, Fly.io)
 
