@@ -33,6 +33,7 @@ import {
   Gauge,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { RecordEditor } from './record-editor'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -403,7 +404,7 @@ export function TaskDetailView({ taskId, onBack, onDelete }: TaskDetailProps) {
         </TabsList>
 
         <TabsContent value="data" className="mt-3">
-          <DataTab items={items} fields={task.fields} sources={sources} confidenceFilter={confidenceFilter} onClearConfidenceFilter={() => setConfidenceFilter('all')} />
+          <DataTab taskId={taskId} items={items} fields={task.fields} sources={sources} confidenceFilter={confidenceFilter} onClearConfidenceFilter={() => setConfidenceFilter('all')} onChanged={load} />
         </TabsContent>
 
         <TabsContent value="sources" className="mt-3">
@@ -457,7 +458,7 @@ function WorkflowStepCard({ step, isLast }: { step: WorkflowStep; isLast: boolea
 // Data tab
 // ---------------------------------------------------------------------------
 
-function DataTab({ items, fields, sources, confidenceFilter, onClearConfidenceFilter }: { items: DataItemView[]; fields: any[]; sources: DataSourceView[]; confidenceFilter: 'all' | 'high' | 'medium' | 'low'; onClearConfidenceFilter: () => void }) {
+function DataTab({ taskId, items, fields, sources, confidenceFilter, onClearConfidenceFilter, onChanged }: { taskId: string; items: DataItemView[]; fields: any[]; sources: DataSourceView[]; confidenceFilter: 'all' | 'high' | 'medium' | 'low'; onClearConfidenceFilter: () => void; onChanged: () => void }) {
   const [q, setQ] = useState('')
   const [validOnly, setValidOnly] = useState(false)
 
@@ -528,90 +529,17 @@ function DataTab({ items, fields, sources, confidenceFilter, onClearConfidenceFi
 
       {/* Record cards */}
       <div className="grid gap-2.5">
-        {filtered.map((it, idx) => {
-          const src = it.sourceId ? sourceMap.get(it.sourceId) : null
-          return (
-            <Card key={it.id} className="hover:shadow-sm hover:border-emerald-500/30 transition-all">
-              <CardContent className="p-3.5">
-                <div className="flex items-start gap-3">
-                  {/* Index + confidence */}
-                  <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5">
-                      <span className="text-[10px] font-mono text-muted-foreground/50">{idx + 1}</span>
-                      <div className="flex flex-col items-center gap-0.5">
-                        <div className="h-10 w-1.5 overflow-hidden rounded-full bg-muted">
-                          <div
-                            className={cn(
-                              'w-full rounded-full transition-all',
-                              it.confidence >= 75 ? 'bg-emerald-500' : it.confidence >= 50 ? 'bg-amber-500' : 'bg-red-500',
-                            )}
-                            style={{ height: `${it.confidence}%` }}
-                          />
-                        </div>
-                        <span className={cn(
-                          'text-[9px] tabular-nums font-semibold',
-                          it.confidence >= 75 ? 'text-emerald-600 dark:text-emerald-400' : it.confidence >= 50 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400',
-                        )}>
-                          {it.confidence}%
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start gap-2 flex-wrap">
-                        <h4 className="text-sm font-semibold leading-snug break-words">
-                          {it.title || 'Untitled'}
-                        </h4>
-                        {!it.valid && (
-                          <Badge variant="outline" className="text-[9px] py-0 px-1.5 bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 shrink-0">
-                            invalid
-                          </Badge>
-                        )}
-                      </div>
-                      {it.summary && (
-                        <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2 break-words">
-                          {it.summary}
-                        </p>
-                      )}
-                      {/* Field values */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 mt-2">
-                        {fieldNames.map((f) => {
-                          const v = it.data[f]
-                          if (v === undefined || v === null || v === '') return null
-                          return (
-                            <div key={f} className="flex gap-1.5 min-w-0 items-baseline">
-                              <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">{f}:</span>
-                              <span className="text-[11px] font-mono text-foreground/80 break-words min-w-0">
-                                {String(v)}
-                              </span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Source */}
-                    {src && (
-                      <a
-                        href={src.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-[10px] text-sky-600 dark:text-sky-400 hover:underline shrink-0 max-w-[8rem] mt-0.5"
-                        title={src.url}
-                      >
-                        {src.favicon && (
-                          <img src={src.favicon} alt="" className="h-3 w-3 rounded-sm shrink-0" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
-                        )}
-                        <span className="truncate">{src.hostName || hostFromUrl(src.url)}</span>
-                        <ExternalLink className="h-2.5 w-2.5 shrink-0" />
-                      </a>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
+        {filtered.map((it) => (
+          <RecordEditor
+            key={it.id}
+            taskId={taskId}
+            item={it}
+            fields={fields}
+            sources={sources}
+            onChanged={onChanged}
+          />
+        ))}
+      </div>
     </div>
   )
 }

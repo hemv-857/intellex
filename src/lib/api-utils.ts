@@ -102,6 +102,21 @@ export const schemas = {
     .refine((v) => Object.values(v).some((x) => x === true), {
       message: 'Provide one of pinned, restore or purge set to true',
     }),
+  // Exactly one action per PATCH, as with taskPatch. Fields is a free-form
+  // object because the handler validates keys against the task's own declared
+  // fields; this schema only bounds its size.
+  itemPatch: z
+    .object({
+      fields: z.record(z.string().max(200), z.union([z.string().max(4000), z.number(), z.boolean(), z.null()])).optional(),
+      valid: z.boolean().optional(),
+      delete: z.literal(true).optional(),
+    })
+    .refine((v) => Object.keys(v).length === 1, {
+      message: 'Provide exactly one of fields, valid or delete',
+    })
+    .refine((v) => v.fields === undefined || Object.keys(v.fields).length > 0, {
+      message: 'fields must contain at least one field',
+    }),
   bulkTasks: z.object({
     ids: z.array(z.string().min(1)).min(1).max(500),
     action: z.enum(['delete', 'purge', 'restore', 'pin', 'unpin', 'duplicate']),
