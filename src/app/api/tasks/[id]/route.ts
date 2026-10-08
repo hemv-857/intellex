@@ -38,6 +38,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       progress: safeObj(task.progress),
       stats: safeObj(task.stats),
       error: task.error,
+      // Freshness: without this the UI cannot tell an hour-old dataset from a
+      // month-old one, and staleness is invisible until someone checks a date.
+      completedAt: task.completedAt,
+      startedAt: task.startedAt,
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
     },

@@ -125,11 +125,27 @@ export function TaskDetailView({ taskId, onBack, onDelete }: TaskDetailProps) {
     return () => clearInterval(interval)
   }, [task?.status, load])
 
-  const handleRun = async () => {
+  // Read the clock only after mount: calling Date.now() during render gives the
+  // server and the client different answers and trips a hydration mismatch.
+  const [now, setNow] = useState<number | null>(null)
+  useEffect(() => {
+    setNow(Date.now())
+    const t = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(t)
+  }, [])
+
+  const handleRun = async (mode: 'replace' | 'incremental' = 'replace') => {
     setRunning(true)
     try {
-      await api(`/api/tasks/${taskId}/run`, { method: 'POST' })
-      toast.success('Collection started.')
+      await api(`/api/tasks/${taskId}/run`, {
+        method: 'POST',
+        body: JSON.stringify({ mode }),
+      })
+      toast.success(
+        mode === 'incremental'
+          ? 'Incremental collection started — only new sources will be read.'
+          : 'Collection started.',
+      )
       load()
     } catch (e) {
       toast.error((e as Error).message || 'Failed to start')
@@ -283,9 +299,20 @@ export function TaskDetailView({ taskId, onBack, onDelete }: TaskDetailProps) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button size="sm" onClick={handleRun} disabled={isRunning || running} className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white">
+          <Button size="sm" onClick={() => handleRun('replace')} disabled={isRunning || running} className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white">
             {isRunning || running ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Running…</> : <><Rocket className="h-3.5 w-3.5 mr-1.5" /> {task.status === 'planned' ? 'Run Collection' : 'Re-run'}</>}
           </Button>
+          {task.status === 'completed' && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleRun('incremental')}
+              disabled={isRunning || running}
+              title="Keeps existing records and only reads sources it has not seen. Costs far fewer credits than a full re-run."
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Update
+            </Button>
+          )}
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="outline" size="sm" className="text-muted-foreground hover:text-red-500" aria-label="Delete task" title="Delete task">
@@ -342,6 +369,16 @@ export function TaskDetailView({ taskId, onBack, onDelete }: TaskDetailProps) {
               <StatPill icon={ShieldCheck} label="Valid" value={fmtNum(stats.valid ?? items.filter(i => i.valid).length)} tint="text-teal-600 dark:text-teal-400" />
               <StatPill icon={RefreshCw} label="Duplicates" value={fmtNum(stats.duplicates ?? 0)} tint="text-amber-600 dark:text-amber-400" />
               <StatPill icon={Zap} label="Tokens" value={fmtNum(stats.tokens ?? 0)} tint="text-violet-600 dark:text-violet-400" />
+              <StatPill
+                icon={Clock}
+                label="Collected"
+                value={task.completedAt ? timeAgo(task.completedAt) : 'never'}
+                tint={
+                  task.completedAt && now !== null && now - new Date(task.completedAt).getTime() > 7 * 864e5
+                    ? 'text-amber-600 dark:text-amber-400'
+                    : 'text-muted-foreground'
+                }
+              />
             </div>
           </div>
         </CardContent>
