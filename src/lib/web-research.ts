@@ -33,6 +33,8 @@ export interface PageRead {
   url: string
   /** Cleaned page body as markdown. Not HTML — the extractor is an LLM. */
   content: string
+  /** Tavily credits consumed. Requested via include_usage; the field exists. */
+  credits: number
 }
 
 function requireKey(): string {
@@ -84,6 +86,7 @@ function timeRangeFor(recencyDays?: number): 'day' | 'week' | 'month' | 'year' |
 }
 
 interface TavilySearchResponse {
+  usage?: { credits?: number }
   results?: {
     title?: string
     url?: string
@@ -94,10 +97,16 @@ interface TavilySearchResponse {
   }[]
 }
 
+export interface SearchOutcome {
+  results: SearchResultItem[]
+  /** Tavily credits consumed by this call. */
+  credits: number
+}
+
 export async function searchWeb(
   query: string,
   opts: { num: number; recencyDays?: number } = { num: 5 },
-): Promise<SearchResultItem[]> {
+): Promise<SearchOutcome> {
   const time_range = timeRangeFor(opts.recencyDays)
 
   const body = await post<TavilySearchResponse>(
@@ -123,6 +132,7 @@ export async function searchWeb(
     SEARCH_TIMEOUT_MS,
   )
 
+  const credits = typeof body.usage?.credits === 'number' ? body.usage.credits : 0
   const out: SearchResultItem[] = []
   for (const r of body.results ?? []) {
     if (!r?.url) continue
@@ -143,10 +153,11 @@ export async function searchWeb(
       favicon: r.favicon || '',
     })
   }
-  return out
+  return { results: out, credits }
 }
 
 interface TavilyExtractResponse {
+  usage?: { credits?: number }
   results?: { url?: string; raw_content?: string }[]
   failed_results?: { url?: string; error?: string }[]
 }
@@ -181,5 +192,9 @@ export async function readPage(url: string): Promise<PageRead | null> {
     return null
   }
 
-  return { url: hit?.url || url, content }
+  return {
+    url: hit?.url || url,
+    content,
+    credits: typeof body.usage?.credits === 'number' ? body.usage.credits : 0,
+  }
 }

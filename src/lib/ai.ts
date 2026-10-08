@@ -47,6 +47,12 @@ export interface TaskStats {
   /** Set when the last run was incremental, so `items` counts the whole set. */
   incremental?: boolean
   /**
+   * Tavily credits consumed by the run. Both providers are on free tiers with
+   * small monthly allowances, so this is the number that predicts hitting a
+   * limit — token counts alone would not show it coming.
+   */
+  credits?: number
+  /**
    * True when `tokens` is real per-call API usage. False/absent on collections
    * from before the fix, whose `tokens` summed page_reader's reported figure —
    * implausibly large and therefore not comparable.
@@ -254,7 +260,7 @@ interface ExtractedRecord {
 export async function extractFromSource(
   plan: WorkflowPlan,
   source: { url: string; title: string; snippet?: string },
-): Promise<{ records: ExtractedRecord[]; tokens: number; title: string; pageReadOk: boolean }> {
+): Promise<{ records: ExtractedRecord[]; tokens: number; credits: number; title: string; pageReadOk: boolean }> {
   let pageContent = ''
   // `tokens` counts only our own completions. The previous provider also
   // reported a per-page "tokens" figure that was implausibly large (1.4M-2M for
@@ -262,12 +268,14 @@ export async function extractFromSource(
   // paths disagreed with each other; there is no honest page-level number here,
   // so per-source cost is recorded as the real completion usage instead.
   let aiTokens = 0
+  let credits = 0
   let pageReadOk = true
 
   try {
     const page = await withRetry(() => readPage(source.url), 1)
     if (page) {
       pageContent = page.content
+      credits += page.credits
     } else {
       pageReadOk = false
     }
@@ -283,7 +291,7 @@ export async function extractFromSource(
   const content = (snippet ? `Snippet: ${snippet}\n\n` : '') + pageContent
 
   if (!content || content.trim().length < 40) {
-    return { records: [], tokens: aiTokens, title, pageReadOk }
+    return { records: [], tokens: aiTokens, credits, title, pageReadOk }
   }
 
   const { text: raw, tokens } = await chat([
@@ -296,7 +304,7 @@ export async function extractFromSource(
   aiTokens += tokens
   const parsed = safeJsonParse<{ records?: ExtractedRecord[] }>(raw, { records: [] })
   const records = Array.isArray(parsed.records) ? parsed.records : []
-  return { records, tokens: aiTokens, title, pageReadOk }
+  return { records, tokens: aiTokens, credits, title, pageReadOk }
 }
 
 export type RunMode = 'replace' | 'incremental'
@@ -354,11 +362,12 @@ export async function executeWorkflow(taskId: string, mode: RunMode = 'replace')
       try {
         // Bias toward the latest data: request recency for the first couple
         // queries so the engine surfaces recently-published content.
-        const arr = await withRetry(
+        const outcome = await withRetry(
           () => searchWeb(q, { num: MAX_SOURCES_PER_QUERY + 2, recencyDays: qi < 2 ? 365 : undefined }),
           1,
         )
-        for (const r of arr as SearchResultItem[]) {
+        stats.credits = (stats.credits ?? 0) + outcome.credits
+        for (const r of outcome.results as SearchResultItem[]) {
           if (!r?.url || seenUrls.has(r.url)) continue
           if (collectedSources.length >= MAX_TOTAL_SOURCES) break
           // Search results are steered by the planner, which is steered by the
@@ -480,8 +489,9 @@ export async function executeWorkflow(taskId: string, mode: RunMode = 'replace')
         total: sourceRows.length,
       })
       try {
-        const { records, tokens, title, pageReadOk } = await extractFromSource(plan, { url: src.url, title: src.title || '', snippet: src.snippet || '' })
+        const { records, tokens, credits, title, pageReadOk } = await extractFromSource(plan, { url: src.url, title: src.title || '', snippet: src.snippet || '' })
         stats.tokens += tokens
+        stats.credits = (stats.credits ?? 0) + credits
         await db.dataSource.update({
           where: { id: src.id },
           data: {

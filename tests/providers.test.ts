@@ -134,7 +134,7 @@ describe('web-research: searchWeb', () => {
   it('maps Tavily fields onto the engine contract', async () => {
     process.env.TAVILY_API_KEY = 'tvly-test'
     mockFetch([{ body: ok }])
-    const res = await searchWeb('q', { num: 4 })
+    const { results: res } = await searchWeb('q', { num: 4 })
 
     expect(res).toHaveLength(2)
     expect(res[0]).toEqual({
@@ -190,7 +190,7 @@ describe('web-research: searchWeb', () => {
   it('skips malformed result URLs instead of emitting them', async () => {
     process.env.TAVILY_API_KEY = 'tvly-test'
     mockFetch([{ body: { results: [{ url: 'not-a-url', title: 'bad' }, { url: 'https://ok.example.com/x' }] } }])
-    const res = await searchWeb('q', { num: 5 })
+    const { results: res } = await searchWeb('q', { num: 5 })
     expect(res).toHaveLength(1)
     expect(res[0].url).toBe('https://ok.example.com/x')
   })
@@ -198,6 +198,20 @@ describe('web-research: searchWeb', () => {
   it('throws a named error when the key is missing', async () => {
     delete process.env.TAVILY_API_KEY
     expect(searchWeb('q', { num: 3 })).rejects.toThrow(/TAVILY_API_KEY is not set/)
+  })
+
+  // Both providers are on free tiers, so a silent credits number would make
+  // hitting the allowance invisible until it fails.
+  it('reports the credits Tavily actually charged', async () => {
+    process.env.TAVILY_API_KEY = 'tvly-test'
+    mockFetch([{ body: { results: [], usage: { credits: 1 } } }])
+    expect((await searchWeb('q', { num: 3 })).credits).toBe(1)
+  })
+
+  it('reports zero credits when the provider omits usage', async () => {
+    process.env.TAVILY_API_KEY = 'tvly-test'
+    mockFetch([{ body: { results: [] } }])
+    expect((await searchWeb('q', { num: 3 })).credits).toBe(0)
   })
 })
 
@@ -207,6 +221,12 @@ describe('web-research: readPage', () => {
     mockFetch([{ body: { results: [{ url: 'https://ok.example.com/a', raw_content: '# Title\n\nBody text.' }], failed_results: [] } }])
     const res = await readPage('https://ok.example.com/a')
     expect(res?.content).toContain('Body text.')
+  })
+
+  it('reports credits on a successful extraction', async () => {
+    process.env.TAVILY_API_KEY = 'tvly-test'
+    mockFetch([{ body: { results: [{ url: 'https://ok.example.com/a', raw_content: 'body' }], usage: { credits: 1 } } }])
+    expect((await readPage('https://ok.example.com/a'))?.credits).toBe(1)
   })
 
   // The trap this guards: Tavily returns HTTP 200 even when every URL failed.

@@ -225,10 +225,13 @@ describe('searchWeb + engine contract', () => {
     })
 
     const { searchWeb } = await import('../src/lib/web-research')
-    const res = await searchWeb('q', { num: 4 })
+    const { results, credits } = await searchWeb('q', { num: 4 })
 
-    expect(res.map((r) => r.rank)).toEqual([0, 1, 2])
-    expect(res.map((r) => r.host_name)).toEqual(['one.test', 'two.test', 'three.test'])
+    expect(results.map((r) => r.rank)).toEqual([0, 1, 2])
+    expect(results.map((r) => r.host_name)).toEqual(['one.test', 'two.test', 'three.test'])
+    // The mocked body has no usage block, so credits must degrade to 0 rather
+    // than becoming NaN and poisoning the run total.
+    expect(credits).toBe(0)
   })
 })
 
