@@ -140,6 +140,13 @@ export const schemas = {
     label: z.string().max(120).optional(),
     ttlDays: z.number().int().min(0).max(365).optional(), // 0 = never expires
   }),
+  // Webhook is the automatic-backup and alert channel. Validated as an https
+  // URL so a typo cannot silently POST a workspace backup to http://localhost.
+  webhook: z.object({
+    url: z.string().url().max(500),
+    enabled: z.boolean().optional().default(true),
+    backupIntervalMinutes: z.number().int().min(15).max(10080).optional().default(360),
+  }).partial().optional(),
   preferences: z.object({
     defaultSort: z.enum(['relevance', 'latest']).optional(),
     defaultDateRange: z.enum(['any', '7d', '30d', '90d', '365d']).optional(),

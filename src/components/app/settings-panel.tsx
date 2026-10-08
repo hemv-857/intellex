@@ -29,6 +29,7 @@ import {
   RotateCcw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { WebhookSettings } from './webhook-settings'
 
 type SortMode = 'relevance' | 'latest'
 type DateRange = 'any' | '7d' | '30d' | '90d' | '365d'
@@ -280,6 +281,10 @@ export function SettingsPanel({ open, onOpenChange, onThemeChange }: SettingsPan
           <Button size="sm" onClick={save} disabled={!dirty || saving} className="bg-emerald-600 hover:bg-emerald-700 text-white">
             <Save className="h-3.5 w-3.5 mr-1.5" /> {saving ? 'Saving…' : 'Save changes'}
           </Button>
+          <Separator />
+
+          {/* Automatic backup and failure alerts */}
+          <WebhookSettings />
         </div>
       </SheetContent>
     </Sheet>

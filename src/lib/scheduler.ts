@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { db } from '@/lib/db'
 import { executeWorkflow, isRunning, markRunning } from '@/lib/ai'
 import { claimRun, releaseRun, reapStaleRuns } from '@/lib/run-lease'
+import { maybeAutoBackup, notifyRunFailed } from '@/lib/webhook'
 
 // The scheduler itself, extracted from the HTTP route so it can be driven from
 // more than one place: the authenticated /api/scheduler/tick endpoint (cron,
@@ -120,6 +121,11 @@ export async function runSchedulerTick(): Promise<{ processed: number; taskIds: 
             }
           })()
 
+          if (failed) {
+            const title = (await db.task.findUnique({ where: { id: d.id }, select: { title: true } }))?.title || d.id
+            await notifyRunFailed({ taskId: d.id, taskTitle: title, error: after?.error || 'unknown error' })
+          }
+
           await db.activityLog.create({
             data: {
               type: 'schedule_run',
@@ -194,9 +200,14 @@ export async function purgeExpiredTrash(retentionDays = TRASH_RETENTION_DAYS) {
  * One cycle of everything the scheduler does: reclaim dead runs, fire due
  * collections, and sweep old trash. Returns what happened.
  */
-export async function schedulerCycle(opts: { purge?: boolean } = {}) {
+export async function schedulerCycle(opts: { purge?: boolean; backup?: boolean } = {}) {
   const reaped = await reapStaleRuns()
   const tick = await runSchedulerTick()
   const purge = opts.purge ? await purgeExpiredTrash() : null
-  return { ...tick, reaped, purged: purge?.purged ?? 0 }
+  // Automatic backup rides the existing cycle rather than a second timer: it is
+  // due-checked internally, and one fewer interval is one fewer thing to keep
+  // alive. Skipped on the frequent in-process tick to avoid checking on every
+  // 60s pass — only the purge cycle runs it, which is every ~6 hours.
+  const backup = opts.backup ? await maybeAutoBackup().catch(() => null) : null
+  return { ...tick, reaped, purged: purge?.purged ?? 0, backup }
 }
