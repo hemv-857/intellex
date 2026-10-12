@@ -203,6 +203,10 @@ A durable job queue is still the right answer for production-scale reliability; 
 
 `worklog.md` is the chronological build log: 14 phases from initial build through production hardening, each with what changed, how it was verified, and the root cause behind the layout bugs that were fixed (flex `min-h-0` vs Radix `ScrollArea` overflow, to name two).
 
-## License
+## Contributing
 
-[LICENSE](https://github.com/hemv-857/intellex/blob/main/LICENSE) — see the file for the full text.
+Open a PR. CI runs on every push and pull request and must be green before merge ([workflow](.github/workflows/ci.yml)).
+
+Keep commits conventional — `type: description`.
+
+#
