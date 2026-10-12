@@ -1,5 +1,7 @@
 # Intellex
 
+<a href="https://github.com/hemv-857/intellex/actions/workflows/ci.yml"><img src="https://github.com/hemv-857/intellex/actions/workflows/ci.yml/badge.svg" alt="intellex CI"></a> <a href="https://github.com/hemv-857/intellex/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a> <img src="https://img.shields.io/badge/TypeScript-3178C6.svg" alt="TypeScript">
+
 Prompt-based AI data intelligence platform. Describe what you need in plain language; Intellex plans a collection workflow, searches the web, reads each source, extracts structured records, validates them, and hands back an exportable dataset with per-record confidence scores and source links.
 
 ## How a collection runs
@@ -200,3 +202,7 @@ A durable job queue is still the right answer for production-scale reliability; 
 ## Development log
 
 `worklog.md` is the chronological build log: 14 phases from initial build through production hardening, each with what changed, how it was verified, and the root cause behind the layout bugs that were fixed (flex `min-h-0` vs Radix `ScrollArea` overflow, to name two).
+
+## License
+
+[LICENSE](https://github.com/hemv-857/intellex/blob/main/LICENSE) — see the file for the full text.
